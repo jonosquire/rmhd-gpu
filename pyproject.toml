@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rmhdgpu"
+version = "0.1.0"
+description = "Foundation for a single-GPU Fourier pseudo-spectral RMHD-style code."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["rmhdgpu*"]
+
+[tool.pytest.ini_options]
+testpaths = ["rmhdgpu/tests"]
+
