@@ -1,0 +1,1 @@
+{"cuda": "12.x", "packaging": "pip", "cutensor": {"version": "2.4.1", "min_pypi_version": "2.3.0", "filenames": ["libcutensor.so.2.4.1", "libcutensorMg.so.2.4.1"]}, "nccl": {"version": "2.25.1", "min_pypi_version": "2.18.1", "filenames": ["libnccl.so.2.25.1"]}}
