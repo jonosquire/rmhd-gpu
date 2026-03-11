@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 
+import numpy as np
+
 from rmhdgpu.backend import build_backend
 from rmhdgpu.config import Config
 from rmhdgpu.diagnostics.alfvenic import alfvenic_cross_helicity, alfvenic_energy
-from rmhdgpu.diagnostics.scalar import compute_scalar_diagnostics
+from rmhdgpu.diagnostics.scalar import compute_energy_diagnostics, compute_scalar_diagnostics
 from rmhdgpu.errors import NonFiniteStateError
 from rmhdgpu.equations import s09
 from rmhdgpu.fft import FFTManager
+from rmhdgpu.forcing import apply_forcing_kick, generate_forcing_kick
 from rmhdgpu.grid import build_grid
 from rmhdgpu.initconds.eigenmodes import alfven_mode_state
 from rmhdgpu.masks import build_dealias_mask
@@ -20,13 +23,16 @@ from rmhdgpu.workspace import Workspace
 
 
 def main() -> None:
-    """Run a tiny end-to-end dissipative s09 setup with variable timestep."""
+    """Run a tiny end-to-end dissipative s09 setup, optionally with forcing."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", default="numpy", choices=["numpy", "scipy_cpu", "cupy"])
     parser.add_argument("--fft-workers", type=int, default=None)
     parser.add_argument("--nx", type=int, default=8)
     parser.add_argument("--tmax", type=float, default=5.0e-2)
+    parser.add_argument("--use-forcing", action="store_true")
+    parser.add_argument("--force-sigma", type=float, default=5.0e-2)
+    parser.add_argument("--forcing-seed", type=int, default=1234)
     args = parser.parse_args()
 
     config = Config(
@@ -38,9 +44,14 @@ def main() -> None:
         dt_init=5.0e-3,
         dt_max=2.0e-2,
         tmax=args.tmax,
+        use_forcing=args.use_forcing,
+        forcing_seed=args.forcing_seed,
     )
     config.dissipation["psi"]["nu_perp"] = 5.0e-3
     config.dissipation["omega"]["nu_perp"] = 5.0e-3
+    if config.use_forcing:
+        config.force_amplitudes["psi"] = args.force_sigma
+        config.force_amplitudes["omega"] = args.force_sigma
     backend = build_backend(config)
     grid = build_grid(config, backend)
     fft = FFTManager(grid, backend)
@@ -70,11 +81,14 @@ def main() -> None:
     steps = 0
     next_scalar_output = 0.0
     dt_last = config.dt_init
+    forcing_rng = np.random.default_rng(config.forcing_seed) if config.use_forcing else None
     print(
         "backend configuration",
         {
             "backend": backend.backend_name,
             "fft_workers": backend.fft_workers,
+            "use_forcing": config.use_forcing,
+            "forcing_seed": config.forcing_seed if config.use_forcing else None,
         },
     )
 
@@ -89,6 +103,9 @@ def main() -> None:
                 dt = config.dt_init
             dt = min(dt, config.tmax - t)
             state = if_ssprk3_step(state, dt, s09.ideal_rhs, linear_ops, rhs_kwargs=rhs_kwargs)
+            if config.use_forcing:
+                forcing_kick = generate_forcing_kick(state, grid, fft, backend, config, forcing_rng, dt)
+                state = apply_forcing_kick(state, forcing_kick)
             t += dt
             dt_last = dt
             steps += 1
@@ -106,7 +123,7 @@ def main() -> None:
                         "t": t,
                         "dt": dt,
                         "psi_rms": diagnostics["psi_rms"],
-                        "alfvenic_energy": alfvenic_energy(state, grid, fft),
+                        **compute_energy_diagnostics(state, grid, fft, backend),
                         "alfvenic_cross_helicity": alfvenic_cross_helicity(state, grid, fft),
                     },
                 )

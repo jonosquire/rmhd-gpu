@@ -22,6 +22,10 @@ def _default_dissipation_for_fields(field_names: list[str]) -> dict[str, dict[st
     return {name: deepcopy(template) for name in field_names}
 
 
+def _default_force_amplitudes_for_fields(field_names: list[str]) -> dict[str, float]:
+    return {name: 0.0 for name in field_names}
+
+
 @dataclass(slots=True)
 class Config:
     """Container for simulation-wide parameters.
@@ -57,6 +61,12 @@ class Config:
     dealias_mode: str = "two_thirds"
     vA: float = 1.0
     cs2_over_vA2: float = 1.0
+    use_forcing: bool = False
+    n_min_force: float = 1.0
+    n_max_force: float = 3.0
+    alpha_force: float = 0.0
+    force_amplitudes: dict[str, float] | None = None
+    forcing_seed: int | None = None
     field_names: list[str] = field(default_factory=lambda: list(DEFAULT_FIELD_NAMES))
     dissipation: dict[str, dict[str, float | int]] | None = None
 
@@ -112,6 +122,8 @@ class Config:
             raise ValueError(f"use_variable_dt must be bool; got {self.use_variable_dt!r}.")
         if not isinstance(self.fail_on_nonfinite, bool):
             raise ValueError(f"fail_on_nonfinite must be bool; got {self.fail_on_nonfinite!r}.")
+        if not isinstance(self.use_forcing, bool):
+            raise ValueError(f"use_forcing must be bool; got {self.use_forcing!r}.")
         if not isinstance(self.runtime_check_every, (int, np.integer)) or self.runtime_check_every <= 0:
             raise ValueError(
                 f"runtime_check_every must be a positive integer; got {self.runtime_check_every!r}."
@@ -134,6 +146,49 @@ class Config:
             raise ValueError("field_names must contain at least one field.")
         if len(set(self.field_names)) != len(self.field_names):
             raise ValueError(f"field_names must be unique; got {self.field_names!r}.")
+
+        self.n_min_force = float(self.n_min_force)
+        self.n_max_force = float(self.n_max_force)
+        self.alpha_force = float(self.alpha_force)
+        if self.n_min_force < 0.0:
+            raise ValueError(f"n_min_force must be nonnegative; got {self.n_min_force!r}.")
+        if self.n_max_force <= self.n_min_force:
+            raise ValueError(
+                f"n_max_force must be greater than n_min_force; got "
+                f"n_min_force={self.n_min_force}, n_max_force={self.n_max_force}."
+            )
+        if self.alpha_force < 0.0:
+            raise ValueError(f"alpha_force must be nonnegative; got {self.alpha_force!r}.")
+        if self.forcing_seed is not None:
+            if not isinstance(self.forcing_seed, (int, np.integer)):
+                raise ValueError(
+                    f"forcing_seed must be an integer when provided; got {self.forcing_seed!r}."
+                )
+            self.forcing_seed = int(self.forcing_seed)
+
+        if self.force_amplitudes is None:
+            self.force_amplitudes = _default_force_amplitudes_for_fields(self.field_names)
+        else:
+            self.force_amplitudes = deepcopy(self.force_amplitudes)
+
+        force_keys = set(self.force_amplitudes)
+        valid_keys = set(self.field_names)
+        extra_force_keys = sorted(force_keys - valid_keys)
+        if extra_force_keys:
+            raise ValueError(
+                "force_amplitudes keys must be a subset of field_names; "
+                f"unexpected keys: {extra_force_keys}."
+            )
+
+        cleaned_force_amplitudes = _default_force_amplitudes_for_fields(self.field_names)
+        for field_name, amplitude in self.force_amplitudes.items():
+            amplitude_value = float(amplitude)
+            if amplitude_value < 0.0:
+                raise ValueError(
+                    f"force_amplitudes[{field_name!r}] must be nonnegative; got {amplitude_value!r}."
+                )
+            cleaned_force_amplitudes[field_name] = amplitude_value
+        self.force_amplitudes = cleaned_force_amplitudes
 
         if self.dissipation is None:
             self.dissipation = _default_dissipation_for_fields(self.field_names)

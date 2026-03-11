@@ -5,6 +5,9 @@ from __future__ import annotations
 import math
 from typing import Any, Iterable
 
+import numpy as np
+
+from rmhdgpu.forcing import apply_forcing_kick, generate_forcing_kick
 from rmhdgpu.state import State
 from rmhdgpu.utils import check_state_finite
 
@@ -221,6 +224,7 @@ def evolve_until(
     fixed_dt: float | None = None,
     check_every: int | None = None,
     stepper_func: Any | None = None,
+    forcing_rng: np.random.Generator | None = None,
 ) -> tuple[State, dict[str, float | int]]:
     """Advance until `t_final`, using variable or fixed timestep selection.
 
@@ -243,6 +247,10 @@ def evolve_until(
     if stepper_func is None:
         stepper_func = if_ssprk3_step
 
+    forcing_rng_obj = forcing_rng
+    if getattr(params_obj, "use_forcing", False) and forcing_rng_obj is None:
+        forcing_rng_obj = np.random.default_rng(getattr(params_obj, "forcing_seed", None))
+
     current = state
     t = 0.0
     dt_prev: float | None = None
@@ -261,6 +269,17 @@ def evolve_until(
 
         dt = min(dt, t_final - t)
         current = stepper_func(current, dt, ideal_rhs_func, linear_ops, rhs_kwargs=kwargs)
+        if getattr(params_obj, "use_forcing", False):
+            forcing_kick = generate_forcing_kick(
+                current,
+                grid,
+                fft,
+                current.backend,
+                params_obj,
+                forcing_rng_obj,
+                dt,
+            )
+            current = apply_forcing_kick(current, forcing_kick)
         t += dt
         dt_prev = dt
         steps += 1

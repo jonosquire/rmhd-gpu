@@ -9,6 +9,9 @@ import numpy as np
 from rmhdgpu.equations.s09 import derive_phi_hat
 
 
+PERPENDICULAR_SPECTRUM_KEYS = ("u_perp", "b_perp", "upar", "dbpar", "s")
+
+
 def _rfft_weights(grid: Any) -> np.ndarray:
     weights = np.ones(grid.fourier_shape, dtype=np.float64)
     if grid.Nz % 2 == 0:

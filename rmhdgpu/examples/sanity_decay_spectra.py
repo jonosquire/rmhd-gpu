@@ -103,9 +103,18 @@ def _plot_spectra(
     colors = plt.cm.plasma(np.linspace(0.1, 0.9, len(spectra_by_time)))
 
     for axis, key in zip(axes_flat[: len(keys)], keys, strict=True):
+        ymax = 0.0
+
         for color, (time, spectra) in zip(colors, spectra_by_time, strict=True):
             mask = spectra["kperp"] > 0.0
-            axis.loglog(spectra["kperp"][mask], spectra[key][mask], color=color, lw=2, label=f"t={time:.2f}")
+            x = spectra["kperp"][mask]
+            y = spectra[key][mask]
+
+            axis.loglog(x, y, color=color, lw=2, label=f"t={time:.2f}")
+
+            positive = y[y > 0.0]
+        if positive.size:
+            ymax = max(ymax, positive.max())
 
         reference_k = spectra_by_time[0][1]["kperp"]
         mask = reference_k > 1.0
@@ -113,6 +122,13 @@ def _plot_spectra(
             k_ref = reference_k[mask]
             y_ref = 1.0e-3 * (k_ref / k_ref[0]) ** (-5.0 / 3.0)
             axis.loglog(k_ref, y_ref, "k--", alpha=0.5, label=r"$k^{-5/3}$")
+
+        mask0 = spectra_by_time[0][1]["kperp"] > 0.0
+        y0 = spectra_by_time[0][1][key][mask0]
+        positive0 = y0[y0 > 0.0]
+        if positive0.size:
+            ymax = positive0.max()
+            axis.set_ylim(ymax * 1e-6, ymax)
 
         axis.set_title(titles[key])
         axis.set_xlabel(r"$k_\perp$")
@@ -129,8 +145,8 @@ def _plot_spectra(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="sanity_plots", help="Directory where figures are written.")
-    parser.add_argument("--n", type=int, default=96, help="Grid resolution in each direction.")
-    parser.add_argument("--t-final", type=float, default=0.5, help="Final time.")
+    parser.add_argument("--n", type=int, default=128, help="Grid resolution in each direction.")
+    parser.add_argument("--t-final", type=float, default=4.0, help="Final time.")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -140,7 +156,8 @@ def main() -> None:
         Nx=args.n,
         Ny=args.n,
         Nz=args.n,
-        backend="numpy",
+        backend="scipy_cpu",
+        fft_workers=8,
         cfl_number=0.5,
         dt_max=2.0e-2,
         tmax=args.t_final,
@@ -168,7 +185,7 @@ def main() -> None:
     # Choose the dissipation scale at roughly half the dealiased perpendicular
     # maximum so the damping acts near the top of the retained inertial range
     # rather than all the way at the truncation boundary.
-    k_d = 0.5 * kperp_max_dealiased
+    k_d = 0.7 * kperp_max_dealiased
     nu_perp = estimate_hyperdiffusion_coefficient(k_d=k_d, k0=k0, u_rms=u_rms, order=3)
     nu_par = 0.1 * nu_perp
     print(
@@ -196,7 +213,7 @@ def main() -> None:
         "dealias_mask": mask,
     }
 
-    sample_times = np.linspace(0.0, config.tmax, 6)
+    sample_times = np.linspace(0.0, config.tmax, 10)
     spectra_by_time: list[tuple[float, dict[str, np.ndarray]]] = []
 
     current = state

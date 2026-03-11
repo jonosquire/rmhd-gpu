@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from rmhdgpu.diagnostics.alfvenic import alfvenic_energy
+
 
 def compute_scalar_diagnostics(state: Any, grid: Any, fft: Any, backend: Any) -> dict[str, float]:
     """Compute basic real-space scalar diagnostics for each field.
@@ -27,3 +29,35 @@ def compute_scalar_diagnostics(state: Any, grid: Any, fft: Any, backend: Any) ->
 
     return diagnostics
 
+
+def compute_energy_diagnostics(state: Any, grid: Any, fft: Any, backend: Any) -> dict[str, float]:
+    """Return a small set of quadratic energy-like diagnostics.
+
+    The returned values are volume averages in real space:
+
+    - `alfvenic_energy = 0.5 <|grad_perp phi|^2 + |grad_perp psi|^2>`
+    - `upar_energy = 0.5 <upar^2>`
+    - `dbpar_energy = 0.5 <dbpar^2>`
+    - `entropy_variance = 0.5 <s^2>`
+    - `total_energy_proxy`, the sum of the above pieces
+    """
+
+    xp = backend.xp
+    diagnostics = {
+        "alfvenic_energy": alfvenic_energy(state, grid, fft),
+    }
+
+    upar_real = fft.c2r(state["upar"])
+    dbpar_real = fft.c2r(state["dbpar"])
+    entropy_real = fft.c2r(state["s"])
+
+    diagnostics["upar_energy"] = backend.scalar_to_float(0.5 * xp.mean(upar_real**2))
+    diagnostics["dbpar_energy"] = backend.scalar_to_float(0.5 * xp.mean(dbpar_real**2))
+    diagnostics["entropy_variance"] = backend.scalar_to_float(0.5 * xp.mean(entropy_real**2))
+    diagnostics["total_energy_proxy"] = (
+        diagnostics["alfvenic_energy"]
+        + diagnostics["upar_energy"]
+        + diagnostics["dbpar_energy"]
+        + diagnostics["entropy_variance"]
+    )
+    return diagnostics
