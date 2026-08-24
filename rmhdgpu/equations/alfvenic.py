@@ -19,9 +19,13 @@ from typing import Any
 
 import numpy as np
 
+from rmhdgpu.diagnostics.alfvenic import elsasser_energies
 from rmhdgpu.diagnostics.budget import flatten_conserved_quantity_budgets
 from rmhdgpu.diagnostics.scalar import STANDARD_ENERGY_SCALAR_DIAGNOSTIC_INFO
-from rmhdgpu.diagnostics.spectra import perpendicular_shell_spectrum
+from rmhdgpu.diagnostics.spectra import (
+    elsasser_perpendicular_spectra,
+    perpendicular_shell_spectrum,
+)
 from rmhdgpu.fourier_diagnostics import modal_average
 from rmhdgpu.operators import inv_lap_perp, lap_perp, poisson_bracket
 from rmhdgpu.state import State
@@ -34,6 +38,10 @@ DEFAULT_INITIAL_CONDITION = "alfven_mode"
 SCALAR_DIAGNOSTIC_INFO = {
     **STANDARD_ENERGY_SCALAR_DIAGNOSTIC_INFO,
     "alfvenic_energy": "Total two-field Alfvenic energy: 0.5 <|grad phi|^2 + |grad psi|^2>.",
+    "elsasser_energy_plus": "E+ = 0.5 <|grad(phi - psi)|^2>.",
+    "elsasser_energy_minus": "E- = 0.5 <|grad(phi + psi)|^2>.",
+    "elsasser_energy_ratio": "Elsasser energy ratio E+ / E-.",
+    "normalized_cross_helicity": "(E- - E+) / (E+ + E-) for the package potential convention.",
 }
 
 _ORIGINAL_POISSON_BRACKET = poisson_bracket
@@ -335,7 +343,19 @@ def perpendicular_energy_spectra(
         backend,
         bin_width=bin_width,
     )
-    return {"kperp": kperp, "u_perp": u_perp, "b_perp": b_perp}
+    elsasser = elsasser_perpendicular_spectra(
+        state,
+        grid,
+        backend,
+        bin_width=bin_width,
+    )
+    return {
+        "kperp": kperp,
+        "u_perp": u_perp,
+        "b_perp": b_perp,
+        "z_plus": elsasser["z_plus"],
+        "z_minus": elsasser["z_minus"],
+    }
 
 
 def total_energy_modal_density(state: State, grid: Any, backend: Any, params: Any) -> Any:
@@ -423,6 +443,7 @@ def compute_equation_scalar_diagnostics(
     diagnostics = {
         "alfvenic_energy": alfvenic_energy(state, grid, backend, params),
     }
+    diagnostics.update(elsasser_energies(state, grid, backend))
 
     budgets = compute_conserved_quantity_budgets(
         state,
