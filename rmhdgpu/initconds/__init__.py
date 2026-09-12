@@ -15,6 +15,7 @@ from rmhdgpu.initconds.builtin import (
     get_initial_condition_builder,
     initial_u_rms,
     list_initial_condition_types,
+    low_beta_accretion_mode,
     low_beta_stratified_mode,
     normalize_initial_condition_parameters,
     random_spectrum,
@@ -27,10 +28,16 @@ from rmhdgpu.initconds.eigenmodes_s09 import (
     entropy_mode_state,
     slow_mode_state,
 )
+from rmhdgpu.initconds.eigenmodes_low_beta_accretion import (
+    EIGENMODE_BRANCHES,
+    low_beta_accretion_mode_eigenvalue,
+    low_beta_accretion_mode_state,
+)
 from rmhdgpu.initconds.eigenmodes_low_beta_stratified import low_beta_stratified_mode_state
 from rmhdgpu.initconds.testing import single_mode_field
 
 __all__ = [
+    "EIGENMODE_BRANCHES",
     "RANDOM_SPECTRUM_DEFAULTS",
     "alfven_mode",
     "alfven_mode_state",
@@ -41,6 +48,9 @@ __all__ = [
     "get_initial_condition_builder",
     "initial_u_rms",
     "list_initial_condition_types",
+    "low_beta_accretion_mode",
+    "low_beta_accretion_mode_eigenvalue",
+    "low_beta_accretion_mode_state",
     "low_beta_stratified_mode",
     "low_beta_stratified_mode_state",
     "normalize_initial_condition_parameters",

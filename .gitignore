@@ -4,3 +4,6 @@ sanity_plots/*
 quick_tests/*
 *.pyc
 .codex
+
+# Untracked validation/report folder for the low_beta_accretion equation set.
+low_beta_accretion_tests/

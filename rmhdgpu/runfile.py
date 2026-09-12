@@ -56,7 +56,7 @@ _SECTION_KEYS = {
     "output": {"t_out_scal", "t_out_spec", "t_out_full"},
     "backend": {"backend", "fft_workers", "real_dtype", "complex_dtype"},
     "runtime": {"runtime_check_every", "progress_output_every", "fail_on_nonfinite", "dealias", "dealias_mode"},
-    "physics": {"vA", "cs2_over_vA2", "N2"},
+    "physics": {"vA", "cs2_over_vA2", "N2", "q_shear", "vA_over_U", "B_hat", "P_hat", "rho_hat", "gamma_ad"},
     "forcing": {
         "use_forcing",
         "forcing_mode",
@@ -90,7 +90,7 @@ _SECTION_TO_CONFIG_KEYS = {
     "output": {"t_out_scal", "t_out_spec", "t_out_full"},
     "backend": {"backend", "fft_workers", "real_dtype", "complex_dtype"},
     "runtime": {"runtime_check_every", "progress_output_every", "fail_on_nonfinite", "dealias", "dealias_mode"},
-    "physics": {"vA", "cs2_over_vA2", "N2"},
+    "physics": {"vA", "cs2_over_vA2", "N2", "q_shear", "vA_over_U", "B_hat", "P_hat", "rho_hat", "gamma_ad"},
     "forcing": {
         "use_forcing",
         "forcing_mode",
@@ -324,7 +324,17 @@ def cli_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
     if "equation_mode" in values:
         overrides.setdefault("equations", {})["mode"] = values["equation_mode"]
 
-    physics_map = {"vA": "vA", "cs2_over_vA2": "cs2_over_vA2", "N2": "N2"}
+    physics_map = {
+        "vA": "vA",
+        "cs2_over_vA2": "cs2_over_vA2",
+        "N2": "N2",
+        "q_shear": "q_shear",
+        "vA_over_U": "vA_over_U",
+        "B_hat": "B_hat",
+        "P_hat": "P_hat",
+        "rho_hat": "rho_hat",
+        "gamma_ad": "gamma_ad",
+    }
     for cli_key, config_key in physics_map.items():
         if cli_key in values:
             _set_section("physics", config_key, values[cli_key])
@@ -465,6 +475,12 @@ def _resolved_document(
             "vA": config.vA,
             "cs2_over_vA2": config.cs2_over_vA2,
             "N2": config.N2,
+            "q_shear": config.q_shear,
+            "vA_over_U": config.vA_over_U,
+            "B_hat": config.B_hat,
+            "P_hat": config.P_hat,
+            "rho_hat": config.rho_hat,
+            "gamma_ad": config.gamma_ad,
             "use_forcing": config.use_forcing,
             "forcing_mode": config.forcing_mode,
             "n_min_force": config.n_min_force,
@@ -523,6 +539,12 @@ def _resolved_document(
             "vA": config_values["vA"],
             "cs2_over_vA2": config_values["cs2_over_vA2"],
             "N2": config_values["N2"],
+            "q_shear": config_values["q_shear"],
+            "vA_over_U": config_values["vA_over_U"],
+            "B_hat": config_values["B_hat"],
+            "P_hat": config_values["P_hat"],
+            "rho_hat": config_values["rho_hat"],
+            "gamma_ad": config_values["gamma_ad"],
         },
         "forcing": {
             "use_forcing": config_values["use_forcing"],

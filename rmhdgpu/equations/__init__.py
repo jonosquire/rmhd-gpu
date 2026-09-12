@@ -10,13 +10,14 @@ from __future__ import annotations
 from importlib import import_module
 from types import ModuleType
 
-from . import alfvenic, low_beta_stratified, s09
+from . import alfvenic, low_beta_accretion, low_beta_stratified, s09
 
 
 _EQUATION_MODULES: dict[str, str] = {
     "alfvenic": "rmhdgpu.equations.alfvenic",
     "s09": "rmhdgpu.equations.s09",
     "low_beta_stratified": "rmhdgpu.equations.low_beta_stratified",
+    "low_beta_accretion": "rmhdgpu.equations.low_beta_accretion",
 }
 
 
@@ -60,6 +61,7 @@ __all__ = [
     "get_equation_module",
     "ideal_rhs",
     "linear_matrix",
+    "low_beta_accretion",
     "low_beta_stratified",
     "s09",
 ]
