@@ -6,4 +6,4 @@ quick_tests/*
 .codex
 
 # Untracked validation/report folder for the low_beta_accretion equation set.
-low_beta_accretion_tests/*
+low_beta_accretion_tests/
