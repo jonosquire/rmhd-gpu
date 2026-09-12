@@ -142,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vA", type=float, default=argparse.SUPPRESS)
     parser.add_argument("--cs2-over-vA2", dest="cs2_over_vA2", type=float, default=argparse.SUPPRESS)
     parser.add_argument("--N2", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--q-shear", dest="q_shear", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--vA-over-U", dest="vA_over_U", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--B-hat", dest="B_hat", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--P-hat", dest="P_hat", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--rho-hat", dest="rho_hat", type=float, default=argparse.SUPPRESS)
+    parser.add_argument("--gamma-ad", dest="gamma_ad", type=float, default=argparse.SUPPRESS)
 
     parser.add_argument("--use-forcing", action=argparse.BooleanOptionalAction, default=argparse.SUPPRESS)
     parser.add_argument("--forcing-mode", choices=["field", "elsasser"], default=argparse.SUPPRESS)

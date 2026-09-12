@@ -154,6 +154,15 @@ class Config:
     vA: float = 1.0
     cs2_over_vA2: float = 1.0
     N2: float = 1.0
+    # Background parameters of the `low_beta_accretion` disc system. These are
+    # ignored by the other equation sets. `cs2_over_vA2` doubles as the
+    # `beta_tilde = cs^2 / vA^2` of that system.
+    q_shear: float = 1.5
+    vA_over_U: float = 0.0
+    B_hat: float = 0.0
+    P_hat: float = 0.0
+    rho_hat: float = 0.0
+    gamma_ad: float = 5.0 / 3.0
     use_forcing: bool = False
     forcing_mode: str = "field"
     n_min_force: float = 1.0
@@ -296,6 +305,17 @@ class Config:
             raise ValueError(f"N2 must be finite; got {self.N2!r}.")
         if self.N2 == 0.0:
             raise ValueError(f"N2 must be nonzero; got {self.N2!r}.")
+
+        for name in ("q_shear", "vA_over_U", "B_hat", "P_hat", "rho_hat"):
+            value = float(getattr(self, name))
+            if not np.isfinite(value):
+                raise ValueError(f"{name} must be finite; got {value!r}.")
+            setattr(self, name, value)
+        if self.vA_over_U < 0.0:
+            raise ValueError(f"vA_over_U must be nonnegative; got {self.vA_over_U!r}.")
+        self.gamma_ad = float(self.gamma_ad)
+        if not np.isfinite(self.gamma_ad) or self.gamma_ad <= 1.0:
+            raise ValueError(f"gamma_ad must be finite and greater than 1; got {self.gamma_ad!r}.")
         if self.forcing_seed is not None:
             if not isinstance(self.forcing_seed, (int, np.integer)):
                 raise ValueError(

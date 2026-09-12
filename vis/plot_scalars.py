@@ -36,6 +36,8 @@ def _default_columns(fieldnames: list[str]) -> list[str]:
     preferred = [
         "total_energy",
         "alfvenic_energy",
+        "compressive_energy",
+        "entropy_energy",
         "upar_energy",
         "dbpar_energy",
         "a_energy",

@@ -84,6 +84,7 @@ Available equation sets are:
 - `alfvenic`: lightweight two-field Alfvénic system with fields `psi`, `omega`
 - `s09`: homogeneous five-field system with fields `psi`, `omega`, `upar`, `dbpar`, `s`
 - `low_beta_stratified`: three-field system with fields `psi`, `omega`, `a`
+- `low_beta_accretion`: five-field accretion-disc system with fields `psi`, `omega`, `upar`, `dbpar`, `drho`
 
 The selected equation set determines the evolved field list, so manual dissipation and per-field forcing-rate settings must use the matching field names.
 
@@ -92,6 +93,16 @@ need the slow/entropy sector from `s09`; it reduces memory use and the amount
 of work per timestep. Its equation implementation is intentionally more direct
 and less readable than the other equation sets because this is the performance
 path for large two-field GPU runs.
+
+`low_beta_accretion` is the local RMHD system for a strongly magnetised
+accretion disc with a near-azimuthal mean field. It is the general-geometry
+RMHD equations with parallel background gradients dropped, and it generalises
+the rotating RMHD (RRMHD) model of Kawazura et al. (2022, JPP 88, 905880311) by
+keeping the `vA / U` terms (field-line curvature and radial gradients of `B`,
+`p`, `rho`), which reintroduces buoyancy and makes `drho` dynamical. Setting
+`vA_over_U = 0` reproduces that paper's equations exactly. See the module
+docstring in [`rmhdgpu/equations/low_beta_accretion.py`](rmhdgpu/equations/low_beta_accretion.py)
+for the equations, the normalisation, and the free-energy budget.
 
 The optional `[equations] mode = "linear"` switch is useful for tests and
 teaching examples. It runs the same solver workflow and still calls
@@ -331,7 +342,9 @@ while `N2 < 0` gives oscillatory stable branches. `N2 = 0` is still rejected.
 Manual dissipation remains the default. In that mode, set per-field blocks such
 as `[dissipation.psi]` and `[dissipation.omega]` exactly as before. The valid
 field names come from `[equations].type`; for example `low_beta_stratified`
-accepts `[dissipation.psi]`, `[dissipation.omega]`, and `[dissipation.a]`.
+accepts `[dissipation.psi]`, `[dissipation.omega]`, and `[dissipation.a]`, while
+`low_beta_accretion` accepts `[dissipation.psi]`, `[dissipation.omega]`,
+`[dissipation.upar]`, `[dissipation.dbpar]`, and `[dissipation.drho]`.
 
 Auto dissipation is useful when you want one common hyperdissipation
 coefficient chosen automatically from the fluctuation amplitude near a target
@@ -377,6 +390,7 @@ Currently supported initial conditions are:
 - `type = "random_spectrum"` with `n_min`, `n_max`, `alpha`, `init_energy`, and `seed`; it fills every evolved field with an independent band-limited random spectrum, then rescales the full state so the equation-module `total_energy` matches `init_energy`
 - `type = "single_fourier_mode"` with `k_indices = [kx, ky, kz]`, `amplitude`, and `seed`; it puts independent random coefficients into the same Fourier mode for every evolved field
 - `type = "low_beta_stratified_mode"` for the low-beta stratified linear eigensystem; for `N2 > 0`, `amplitude` rescales the mode so `total_energy ~ amplitude^2`
+- `type = "low_beta_accretion_mode"` for the low-beta accretion linear eigensystem, with `mode` one of `fastest_growing`, `fastest_decaying`, `highest_frequency`, `lowest_frequency`, `entropy`; `amplitude` rescales the mode so `total_energy = amplitude^2`
 
 Adding a new initial condition means adding and registering a builder in
 `rmhdgpu.initconds`. For equation-specific eigenmodes, keep the reusable
@@ -411,6 +425,52 @@ n_par = 1
 
 For this equation set, scalar diagnostics include `total_energy_rhs_stratification` in addition to the usual dissipation, forcing, and total RHS budget columns.
 
+Small low-beta accretion example:
+
+```toml
+[equations]
+type = "low_beta_accretion"
+
+[grid]
+# The parallel box length is measured in vA/Omega; the fastest MRI mode has
+# kz vA / Omega ~ 1.
+Lz = 12.566370614359172
+
+[physics]
+cs2_over_vA2 = 0.6            # beta_tilde = cs^2/vA^2; plasma beta = 2 beta_tilde/gamma_ad
+gamma_ad = 1.6666666666666667
+q_shear = 1.5                 # -d ln Omega / d ln r; 3/2 for Keplerian
+vA_over_U = 0.3               # = 2/lambda; 0 gives the Kawazura et al. (2022) limit
+B_hat = -0.9                  # d ln B   / d ln r
+P_hat = -2.7                  # d ln p   / d ln r
+rho_hat = -1.3                # d ln rho / d ln r
+
+[initial_condition]
+type = "low_beta_accretion_mode"
+
+[initial_condition.parameters]
+k_indices = [0, 1, 2]
+mode = "fastest_growing"
+amplitude = 1e-3
+```
+
+Notes for this equation set:
+
+- `vA` is not used: the normalisation scales it out, so the parallel Alfven
+  speed is 1 and the parallel coordinate is measured in `vA/Omega`.
+- The free energy is positive definite but not conserved. Scalar diagnostics
+  add five signed source columns, `total_energy_rhs_shear`,
+  `..._curvature`, `..._buoyancy`, `..._pressure_gradient` and
+  `..._entropy_gradient`, alongside the usual dissipation, forcing, and total
+  RHS columns.
+- `dbpar` and `drho` share a non-diagonal energy block, so give them the same
+  dissipation coefficients; that is what keeps the compressive dissipation term
+  negative definite.
+- The thin-ring reading of the model, `Lz = 2 pi r`, corresponds to
+  `Lz = 2 pi / vA_over_U` in these units. The solver treats `Lz` and
+  `vA_over_U` as independent; `low_beta_accretion.thin_ring_Lz(config)` returns
+  the thin-ring value if you want to match it.
+
 ## Example Inputs
 
 The repository root includes ready-to-run example inputs:
@@ -421,6 +481,7 @@ The repository root includes ready-to-run example inputs:
 - [`examples/decay_spectra_gpu.input`](examples/decay_spectra_gpu.input)
 - [`examples/forced_turbulence.input`](examples/forced_turbulence.input)
 - [`examples/low_beta_stratified.input`](examples/low_beta_stratified.input)
+- [`examples/low_beta_accretion.input`](examples/low_beta_accretion.input)
 
 For example:
 
@@ -429,6 +490,7 @@ python -m rmhdgpu.run examples/decay_spectra.input
 python -m rmhdgpu.run examples/decay_spectra_auto.input
 python -m rmhdgpu.run examples/decay_spectra_gpu.input
 python -m rmhdgpu.run examples/low_beta_stratified.input
+python -m rmhdgpu.run examples/low_beta_accretion.input
 ```
 
 ## Plotting Saved Output

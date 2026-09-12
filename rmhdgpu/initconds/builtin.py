@@ -27,6 +27,10 @@ import numpy as np
 
 from rmhdgpu.equations import get_equation_module
 from rmhdgpu.forcing import shaped_random_real_field
+from rmhdgpu.initconds.eigenmodes_low_beta_accretion import (
+    EIGENMODE_BRANCHES as LOW_BETA_ACCRETION_BRANCHES,
+    low_beta_accretion_mode_state,
+)
 from rmhdgpu.initconds.eigenmodes_low_beta_stratified import low_beta_stratified_mode_state
 from rmhdgpu.initconds.eigenmodes_s09 import alfven_mode_state
 from rmhdgpu.masks import apply_mask
@@ -334,6 +338,34 @@ def _normalize_low_beta_mode_parameters(parameters: dict[str, Any]) -> dict[str,
     return {"k_indices": k_indices, "amplitude": amplitude, "mode": mode}
 
 
+def _normalize_low_beta_accretion_mode_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
+    allowed = {"k_indices", "amplitude", "mode"}
+    _reject_unknown_parameters("low_beta_accretion_mode", parameters, allowed)
+
+    raw_k = parameters.get("k_indices", [0, 1, 1])
+    if not isinstance(raw_k, (list, tuple)) or len(raw_k) != 3:
+        raise ValueError("k_indices must be an array of three integers.")
+    k_indices: list[int] = []
+    for index, value in enumerate(raw_k):
+        if not isinstance(value, int):
+            raise ValueError(f"k_indices[{index}] must be an integer; got {value!r}.")
+        if value < 0:
+            raise ValueError(f"k_indices[{index}] must be nonnegative; got {value!r}.")
+        k_indices.append(int(value))
+
+    amplitude = float(parameters.get("amplitude", 1.0))
+    if amplitude <= 0.0:
+        raise ValueError(f"amplitude must be positive; got {amplitude!r}.")
+
+    mode = str(parameters.get("mode", "fastest_growing"))
+    if mode not in set(LOW_BETA_ACCRETION_BRANCHES):
+        raise ValueError(
+            f"mode must be one of {sorted(LOW_BETA_ACCRETION_BRANCHES)}; got {mode!r}."
+        )
+
+    return {"k_indices": k_indices, "amplitude": amplitude, "mode": mode}
+
+
 def _normalize_single_fourier_mode_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
     allowed = {"k_indices", "amplitude", "seed"}
     _reject_unknown_parameters("single_fourier_mode", parameters, allowed)
@@ -489,6 +521,44 @@ def low_beta_stratified_mode(
     _require_fields("low_beta_stratified_mode", field_names, ("psi", "omega", "a"))
 
     state = low_beta_stratified_mode_state(
+        grid=grid,
+        backend=backend,
+        field_names=list(field_names),
+        k_indices=normalized["k_indices"],
+        amplitude=normalized["amplitude"],
+        mode=normalized["mode"],
+        params=params,
+    )
+    if dealias_mask is not None:
+        state.apply_mask(dealias_mask)
+    return state
+
+
+@register_initial_condition(
+    "low_beta_accretion_mode",
+    normalize_parameters=_normalize_low_beta_accretion_mode_parameters,
+    description="Single linear eigenmode of the low_beta_accretion equation set.",
+)
+def low_beta_accretion_mode(
+    *,
+    parameters: Mapping[str, Any] | None = None,
+    grid: Any,
+    backend: Any,
+    fft: Any,
+    dealias_mask: Any | None,
+    field_names: Sequence[str],
+    params: Any,
+) -> State:
+    """Build a single low-beta accretion linear eigenmode."""
+
+    normalized = _normalize_low_beta_accretion_mode_parameters(_as_parameter_dict(parameters))
+    _require_fields(
+        "low_beta_accretion_mode",
+        field_names,
+        ("psi", "omega", "upar", "dbpar", "drho"),
+    )
+
+    state = low_beta_accretion_mode_state(
         grid=grid,
         backend=backend,
         field_names=list(field_names),

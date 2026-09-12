@@ -1,0 +1,106 @@
+# `.input` files use TOML syntax.
+#
+# Low-beta accretion-disc RMHD (rotating RMHD with radial background gradients).
+#
+# This equation set evolves [psi, omega, upar, dbpar, drho] in the normalisation
+# of Kawazura et al. (2022): time in 1/Omega, perpendicular lengths in L_perp,
+# parallel lengths in vA/Omega. `vA` is therefore NOT used by this equation set.
+#
+# Local coordinates: z = azimuthal (along the mean field), x = radial,
+# y = minus the rotation axis. All background gradients are radial, which is why
+# every source term below carries a d_y.
+#
+# The free energy is positive definite but not conserved: five named background
+# gradient sources appear in the scalar output as
+#
+#   d_t E = shear + curvature + buoyancy + pressure_gradient + entropy_gradient
+#           + dissipation + forcing
+#
+# Setting vA_over_U = 0 reduces the system exactly to Kawazura et al. (2022)
+# equations (2.3a)-(2.3d), where only `shear` survives (their I_MRI).
+#
+# This case starts from a small random spectrum, grows the MRI, and saturates.
+#
+# Note: do NOT seed this with a single `low_beta_accretion_mode`. The fastest
+# growing mode has kx = 0, so it is a single Fourier mode whose Poisson brackets
+# vanish identically -- an exact nonlinear "channel" solution that grows without
+# limit. A multi-mode seed is what lets parasitic modes break the channel.
+#
+# Use:
+#   python -m rmhdgpu.run examples/low_beta_accretion.input
+#   python vis/plot_scalars.py examples/outputs/scalar_diagnostics.csv
+#   python vis/plot_budget.py examples/outputs/scalar_diagnostics.csv
+#   python vis/plot_spectra.py examples/outputs/spectra.csv
+
+title = "Low-beta accretion-disc MRI example"
+output_dir = "outputs"
+
+[equations]
+type = "low_beta_accretion"
+
+[grid]
+# Box aspect ratio follows Kawazura et al. (2022): a wide radial (x) extent, so
+# the radial parasitic modes that break the MRI channel are resolved, and a
+# parallel extent in units of vA/Omega long enough to hold the fastest-growing
+# mode (kz vA / Omega ~ 1).
+Nx = 64
+Ny = 16
+Nz = 64
+Lx = 25.132741228718345
+Ly = 6.283185307179586
+Lz = 25.132741228718345
+
+[time]
+tmax = 25.0
+dt_init = 1.0e-3
+dt_max = 5.0e-3
+use_variable_dt = true
+cfl_number = 0.4
+
+[output]
+t_out_scal = 0.1
+t_out_spec = 2.0
+t_out_full = 0.0
+
+[backend]
+backend = "numpy"
+
+[runtime]
+progress_output_every = 500
+
+[physics]
+# beta_tilde = cs^2 / vA^2 (so the usual plasma beta is 2 beta_tilde / gamma_ad)
+cs2_over_vA2 = 0.6
+gamma_ad = 1.6666666666666667
+# Keplerian shear, q = -d ln Omega / d ln r
+q_shear = 1.5
+# vA / U = 2 / lambda. Set to 0 for the Kawazura et al. (2022) limit.
+vA_over_U = 0.3
+# Radial logarithmic background gradients d ln X / d ln r
+B_hat = -0.9
+P_hat = -2.7
+rho_hat = -1.3
+
+[initial_condition]
+type = "random_spectrum"
+
+[initial_condition.parameters]
+n_min = 1.0
+n_max = 4.0
+alpha = 0.0
+init_energy = 1.0e-6
+seed = 11
+
+# Adaptive common hyperdissipation: the MRI injects over a broad range of
+# wavenumbers, so a fixed nu chosen in advance either stalls the growth or lets
+# the box blow up. Auto mode tracks the amplitude instead.
+[dissipation]
+mode = "auto"
+n_perp = 3
+n_par = 1
+nu_par = 0.0
+kd_fraction = 0.6
+update_every = 10
+smooth_factor = 0.2
+nu_min = 1.0e-12
+nu_max = 1.0e-1
