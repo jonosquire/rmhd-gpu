@@ -469,16 +469,27 @@ Notes for this equation set:
 - `dbpar` and `drho` share a non-diagonal energy block, so give them the same
   dissipation coefficients; that is what keeps the compressive dissipation term
   negative definite.
-- The parallel box length is not free: the parallel direction is the full
-  circumference of a ring, `Lz = 2 pi r`, which in these units means
-  `Lz = 2 pi / (vA/U)`. So `vA_over_U` is **derived from `Lz`** rather than set,
-  and the two can never disagree. Setting `vA_over_U` explicitly overrides the
-  tie; that is how the straight-field `vA_over_U = 0` limit is selected.
-  `low_beta_accretion.thin_ring_Lz(config)` returns the tied value.
+- `vA_over_U` and `Lz` are **independent**, and `vA_over_U` is the one to think
+  of as the physical parameter. A closed ring would have `Lz = 2 pi r`, i.e.
+  `Lz = 2 pi / (vA/U)` in these units, so for a whole-ring box the two would be
+  degenerate. But a simulation box is normally a sub-arc of the ring, whose
+  modes are just shorter-wavelength modes of the same disc: each depends on
+  `k_par` and `vA/U`, not on `Lz`. That equivalence is linear only — nonlinearly
+  `Lz` sets the largest parallel scale and hence which modes interact, so it is
+  a resolution choice like `Lx` and `Ly` (the same reason you hold the
+  perpendicular box size fixed in ordinary RMHD, where it is degenerate with the
+  fluctuation amplitude). `low_beta_accretion.thin_ring_Lz(config)` reports what
+  a whole-ring box would be, if you want one.
 - At low `beta` with `B_hat != -1` the instability becomes double-humped in
   `k_par` and much stronger than the bare MRI, driven by the radial field
-  gradient (cf. Begelman & Armitage 2023). `B_hat = -1` is the natural control:
-  it is where `grad_perp ln B` cancels the curvature, switching that drive off.
+  gradient (cf. Begelman & Armitage 2023). The first hump is a buoyancy-driven,
+  Alfvenically restored Parker/ballooning mode; the second is a compressive
+  branch driven by the curvature/grad-B term and restored by slow-mode tension,
+  which is why it only separates out at low beta. The `k_par -> 0` limit is a
+  flute interchange with a Solberg-Hoiland criterion,
+  `(vA/U)^2 D > 2(2-q)`, reducing at low beta to `(vA/U)^2 (B_hat^2 - 1) > 2(2-q)`.
+  `B_hat = -1` is the natural control: `B ~ 1/r` is the force-free azimuthal
+  field, which exerts no net magnetic force and so stores no free energy.
 
 ## Example Inputs
 

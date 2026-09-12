@@ -37,16 +37,31 @@ After this rescaling `Omega = 1` and `vA` drops out of the equations entirely:
 the config value `vA` is *not* used by this equation set, and the normalised
 parallel Alfven speed is 1.
 
-The parallel direction is the full azimuthal circumference of a ring at radius
-`r`, so the box length is not free: `Lz = 2 pi r`, which in units of `vA/Omega`
-is
+`vA_over_U` and the box length
+------------------------------
+A real ring closes on itself, `Lz = 2 pi r`, which in units of `vA/Omega` reads
 
-    Lz = 2 pi r Omega / vA = 2 pi U / vA = 2 pi / (vA/U).
+    Lz = 2 pi r Omega / vA = 2 pi U / vA = 2 pi / (vA/U),
 
-`vA_over_U` is therefore *derived from* `Lz` by default (see `Config`), and the
-two can never disagree. Setting `vA_over_U` explicitly overrides the tie; that
-is how the `vA_over_U = 0` limit -- a straight field, i.e. the Kawazura et al.
-(2022) system -- is selected. `thin_ring_Lz(params)` returns the tied value.
+so for a whole-ring box `vA_over_U` and `Lz` would carry the same information
+(`thin_ring_Lz(params)` returns that value). They are nevertheless kept as
+*independent* inputs, and `vA_over_U` is the one to think of as the physical
+parameter:
+
+- A simulation box is normally a sub-arc of the ring, not the whole ring. Its
+  modes are then simply shorter-wavelength modes of the same disc; each one
+  depends on `k_par` and `vA/U`, not on `Lz`.
+- Linearly the two choices are equivalent -- a mode does not know how big the
+  box is -- but nonlinearly they are not: `Lz` fixes the largest parallel scale
+  and hence which modes interact, so it is a numerical choice like `Lx` and
+  `Ly`.
+- This mirrors standard RMHD, where the perpendicular box size is degenerate
+  with the fluctuation amplitude and so is held fixed while physical parameters
+  are varied, rather than being retuned.
+
+So: set `vA_over_U` to select the disc, and choose `Lz` for resolution. The
+default `vA_over_U = 0` is the straight-field limit, i.e. the Kawazura et al.
+(2022) system.
 
 Evolved fields and equations
 ----------------------------
@@ -64,7 +79,7 @@ the ideal equations are
 
 with
 
-- `mu   = vA / U = 2 / lambda`      (`lambda` of the notes; `= 2 pi / Lz`)
+- `mu   = vA / U = 2 / lambda`      (`lambda` of the notes; a free parameter)
 - `bt   = cs^2 / vA^2`              (config `cs2_over_vA2`; `beta = 2 bt / gamma`)
 - `q    = -d ln Omega / d ln r`     (3/2 for Keplerian)
 - `Bhat = d ln B / d ln r`, `Phat = d ln p / d ln r`, `rhohat = d ln rho / d ln r`
@@ -234,13 +249,13 @@ def derived_parameters(params: Any) -> LowBetaAccretionParameters:
 
 
 def thin_ring_Lz(params: Any) -> float:
-    """Return the normalised parallel box length of one full thin ring.
+    """Return the normalised parallel box length of one full ring.
 
-    The thin-ring geometry `Lz = 2 pi r` corresponds, in the normalised
-    parallel coordinate `z Omega / vA`, to `Lz = pi lambda = 2 pi / (vA/U)`.
-    `Config` uses this relation in reverse, deriving `vA_over_U` from `Lz`, so
-    for any configuration that has not overridden `vA_over_U` this returns `Lz`
-    exactly. It is useful for checking a configuration that did override it.
+    A closed ring has `Lz = 2 pi r`, i.e. `Lz = pi lambda = 2 pi / (vA/U)` in
+    the normalised parallel coordinate `z Omega / vA`. A simulation box is
+    normally a sub-arc, so `Lz` is chosen independently for resolution (see the
+    module docstring); this helper says what the whole-ring length would be, for
+    runs that do want to span the full circumference.
     """
 
     mu = derived_parameters(params).mu

@@ -41,6 +41,8 @@ from rmhdgpu.runfile import resolve_run_settings
 from rmhdgpu.state import State
 from rmhdgpu.steppers import ssprk3_step
 from rmhdgpu.workspace import Workspace
+from vis.plot_budget import main as plot_budget_main
+from vis.plot_scalars import main as plot_scalars_main
 
 
 DISC_PARAMS = {
@@ -158,41 +160,41 @@ def test_derived_parameters_match_the_documented_definitions() -> None:
     assert lba.thin_ring_Lz(config) == pytest.approx(2.0 * np.pi / config.vA_over_U)
 
 
-def test_vA_over_U_is_tied_to_the_parallel_box_length() -> None:
-    """The disc geometry fixes Lz = 2 pi r, i.e. Lz = 2 pi / (vA/U) in these units.
+def test_vA_over_U_is_independent_of_the_parallel_box_length() -> None:
+    """`vA_over_U` is a physical parameter; `Lz` is a numerical choice.
 
-    `vA_over_U` is therefore derived from `Lz` rather than being an independent
-    input, so the two can never disagree.
+    A closed ring would have `Lz = 2 pi / (vA/U)`, but a box is normally a
+    sub-arc of the ring, so the two are deliberately *not* tied: linearly a mode
+    depends only on `k_par` and `vA/U`, and nonlinearly `Lz` sets the largest
+    parallel scale and so belongs with `Lx`/`Ly` as a resolution choice.
     """
 
-    for factor in (4.0, 5.0, 8.0):
-        config = _config(Lz=factor * np.pi, vA_over_U=None)
-        assert config.vA_over_U == pytest.approx(2.0 / factor)
-        assert lba.thin_ring_Lz(config) == pytest.approx(config.Lz)
+    for factor in (2.0, 5.0, 8.0):
+        config = _config(Lz=factor * np.pi, vA_over_U=0.4)
+        assert config.vA_over_U == 0.4
+        assert config.Lz == pytest.approx(factor * np.pi)
+        # thin_ring_Lz reports the whole-ring length, whatever Lz happens to be
+        assert lba.thin_ring_Lz(config) == pytest.approx(2.0 * np.pi / 0.4)
 
-    # An explicit value overrides the tie; that is how the straight-field
-    # (Kawazura et al. 2022) limit is selected.
-    override = _config(Lz=4.0 * np.pi, vA_over_U=0.0)
-    assert override.vA_over_U == 0.0
-    assert lba.derived_parameters(override).mu == 0.0
-    assert lba.thin_ring_Lz(override) == float("inf")
+    # The default is the straight-field limit, whatever Lz is.
+    default = Config(equation_set="low_beta_accretion", Lz=3.0 * np.pi)
+    assert default.vA_over_U == 0.0
+    assert lba.derived_parameters(default).mu == 0.0
+    assert lba.thin_ring_Lz(default) == float("inf")
 
 
-def test_example_input_leaves_vA_over_U_tied(tmp_path: Path) -> None:
-    """The shipped example must not set vA_over_U; it comes from Lz."""
+def test_example_input_sets_vA_over_U_explicitly() -> None:
+    """The shipped example must select the disc via vA_over_U, not via Lz."""
 
-    text = (Path(__file__).resolve().parents[2] / "examples" / "low_beta_accretion.input").read_text(
-        encoding="utf-8"
-    )
-    assignments = [
-        line for line in text.splitlines()
-        if line.strip().startswith("vA_over_U") and "=" in line
-    ]
-    assert assignments == [], f"example should not assign vA_over_U; found {assignments}"
-
-    settings = resolve_run_settings(runfile_path=Path(__file__).resolve().parents[2]
-                                    / "examples" / "low_beta_accretion.input")
-    assert settings.config.vA_over_U == pytest.approx(2.0 * np.pi / settings.config.Lz)
+    example = Path(__file__).resolve().parents[2] / "examples" / "low_beta_accretion.input"
+    settings = resolve_run_settings(runfile_path=example)
+    assert settings.config.equation_set == "low_beta_accretion"
+    assert settings.config.vA_over_U > 0.0
+    text = example.read_text(encoding="utf-8")
+    assert any(
+        line.strip().startswith("vA_over_U") and "=" in line
+        for line in text.splitlines()
+    ), "example should set vA_over_U explicitly"
 
 
 def test_invalid_physics_parameters_are_rejected() -> None:
@@ -713,6 +715,30 @@ def _read_rows(path: Path) -> tuple[list[str], list[dict[str, float]]]:
         rows = [{key: float(value) for key, value in row.items()} for row in reader]
         assert reader.fieldnames is not None
         return list(reader.fieldnames), rows
+
+
+def test_vis_budget_and_scalar_scripts_handle_this_equation_set(tmp_path: Path) -> None:
+    """`vis/plot_budget.py` must pick up the five equation-specific source
+    columns, not just dissipation/forcing, and close the budget on them."""
+
+    input_file = tmp_path / "disc_vis.input"
+    _write_input(input_file, tmax=0.05, dt=0.001, t_out_scal=0.005)
+    main([str(input_file)])
+    scalar_path = tmp_path / "outputs" / "scalar_diagnostics.csv"
+
+    budget_figure = tmp_path / "budget.png"
+    assert plot_budget_main([str(scalar_path), "--output", str(budget_figure)]) == budget_figure.resolve()
+    assert budget_figure.exists()
+
+    scalar_figure = tmp_path / "scalars.png"
+    assert plot_scalars_main([str(scalar_path), "--output", str(scalar_figure)]) == scalar_figure.resolve()
+    assert scalar_figure.exists()
+
+    # The generic budget plotter discovers RHS columns by name, so the five
+    # disc sources must be present in the CSV for it to draw them.
+    fieldnames, _ = _read_rows(scalar_path)
+    for name in lba.ENERGY_SOURCE_TERM_NAMES:
+        assert f"total_energy_rhs_{name}" in fieldnames
 
 
 def test_run_writes_all_budget_columns_and_matches_finite_difference(tmp_path: Path) -> None:

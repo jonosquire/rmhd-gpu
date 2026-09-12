@@ -48,8 +48,8 @@ Ny = 16
 Nz = 64
 Lx = 25.132741228718345
 Ly = 6.283185307179586
-# vA_over_U is NOT set in [physics]: the thin-ring geometry ties it to Lz,
-# vA_over_U = 2*pi/Lz, so Lz = 8*pi gives vA/U = 0.25. See the note below.
+# Lz is a numerical choice, like Lx and Ly: it sets the largest parallel scale.
+# It is NOT tied to vA_over_U -- see the note in [physics] below.
 Lz = 25.132741228718345
 
 [time]
@@ -76,10 +76,11 @@ cs2_over_vA2 = 0.6
 gamma_ad = 1.6666666666666667
 # Keplerian shear, q = -d ln Omega / d ln r
 q_shear = 1.5
-# vA_over_U is derived from Lz above (= 2*pi/Lz = 0.25) because the parallel
-# direction is the full circumference of a ring, Lz = 2*pi*r. Set it here only
-# to deliberately break that tie -- e.g. vA_over_U = 0.0 for the straight-field
-# Kawazura et al. (2022) limit.
+# vA / U = 2 / lambda: the physical parameter selecting the disc. A closed ring
+# would have Lz = 2*pi/vA_over_U, but a box is normally a sub-arc of the ring,
+# so Lz is chosen for resolution instead (equivalent linearly, not nonlinearly).
+# Set vA_over_U = 0 for the straight-field Kawazura et al. (2022) limit.
+vA_over_U = 0.25
 # Radial logarithmic background gradients d ln X / d ln r
 B_hat = -0.9
 P_hat = -2.7
