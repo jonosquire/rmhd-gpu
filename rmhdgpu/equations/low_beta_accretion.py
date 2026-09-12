@@ -597,7 +597,15 @@ def perpendicular_energy_spectra(
     bin_width: float | None = None,
     params: Any | None = None,
 ) -> dict[str, np.ndarray]:
-    """Return perpendicular shell spectra for the free-energy pieces."""
+    """Return perpendicular shell spectra for the free-energy pieces.
+
+    `u_perp`, `b_perp`, `upar`, `dbpar` and `s` are the five terms of
+    :func:`total_energy_modal_density`, so they sum to `total_energy`. `drho`
+    is an extra, *unweighted* `0.5 <|drho|^2>` spectrum: it is not part of the
+    energy (the density enters the energy only through the entropy variable
+    `s`), but it is useful for seeing where the density fluctuations live.
+    """
+
 
     xp = backend.xp
     p = derived_parameters(params)
