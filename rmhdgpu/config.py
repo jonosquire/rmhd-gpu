@@ -158,7 +158,9 @@ class Config:
     # ignored by the other equation sets. `cs2_over_vA2` doubles as the
     # `beta_tilde = cs^2 / vA^2` of that system.
     q_shear: float = 1.5
-    vA_over_U: float = 0.0
+    # `vA_over_U` is tied to the parallel box length by the thin-ring geometry
+    # (see __post_init__); leave it None to have it derived from `Lz`.
+    vA_over_U: float | None = None
     B_hat: float = 0.0
     P_hat: float = 0.0
     rho_hat: float = 0.0
@@ -306,13 +308,30 @@ class Config:
         if self.N2 == 0.0:
             raise ValueError(f"N2 must be nonzero; got {self.N2!r}.")
 
-        for name in ("q_shear", "vA_over_U", "B_hat", "P_hat", "rho_hat"):
+        for name in ("q_shear", "B_hat", "P_hat", "rho_hat"):
             value = float(getattr(self, name))
             if not np.isfinite(value):
                 raise ValueError(f"{name} must be finite; got {value!r}.")
             setattr(self, name, value)
-        if self.vA_over_U < 0.0:
-            raise ValueError(f"vA_over_U must be nonnegative; got {self.vA_over_U!r}.")
+
+        # The `low_beta_accretion` disc geometry ties vA/U to the parallel box
+        # length: a ring at radius r has Lz = 2 pi r, and the parallel
+        # coordinate is measured in units of vA/Omega, so
+        #
+        #   Lz = 2 pi r Omega / vA = 2 pi U / vA = 2 pi / (vA/U).
+        #
+        # Deriving vA_over_U from Lz is therefore the default, and keeps the
+        # two from ever disagreeing. Setting it explicitly overrides the tie;
+        # that is how the `vA_over_U = 0` limit (straight field, i.e. the
+        # Kawazura et al. 2022 RRMHD system) is selected.
+        if self.vA_over_U is None:
+            self.vA_over_U = 2.0 * np.pi / self.Lz
+        else:
+            self.vA_over_U = float(self.vA_over_U)
+            if not np.isfinite(self.vA_over_U):
+                raise ValueError(f"vA_over_U must be finite; got {self.vA_over_U!r}.")
+            if self.vA_over_U < 0.0:
+                raise ValueError(f"vA_over_U must be nonnegative; got {self.vA_over_U!r}.")
         self.gamma_ad = float(self.gamma_ad)
         if not np.isfinite(self.gamma_ad) or self.gamma_ad <= 1.0:
             raise ValueError(f"gamma_ad must be finite and greater than 1; got {self.gamma_ad!r}.")

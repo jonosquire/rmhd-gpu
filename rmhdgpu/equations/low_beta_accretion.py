@@ -35,9 +35,18 @@ All fields are normalised exactly as in the Kawazura et al. (2022) paper:
 
 After this rescaling `Omega = 1` and `vA` drops out of the equations entirely:
 the config value `vA` is *not* used by this equation set, and the normalised
-parallel Alfven speed is 1. The parallel box length is measured in units of
-`vA / Omega`; a full thin ring corresponds to `Lz = 2 pi / vA_over_U`, but the
-code does not enforce that (see `thin_ring_Lz`).
+parallel Alfven speed is 1.
+
+The parallel direction is the full azimuthal circumference of a ring at radius
+`r`, so the box length is not free: `Lz = 2 pi r`, which in units of `vA/Omega`
+is
+
+    Lz = 2 pi r Omega / vA = 2 pi U / vA = 2 pi / (vA/U).
+
+`vA_over_U` is therefore *derived from* `Lz` by default (see `Config`), and the
+two can never disagree. Setting `vA_over_U` explicitly overrides the tie; that
+is how the `vA_over_U = 0` limit -- a straight field, i.e. the Kawazura et al.
+(2022) system -- is selected. `thin_ring_Lz(params)` returns the tied value.
 
 Evolved fields and equations
 ----------------------------
@@ -55,7 +64,7 @@ the ideal equations are
 
 with
 
-- `mu   = vA / U = 2 / lambda`      (`lambda` of the notes; `vA_over_U` here)
+- `mu   = vA / U = 2 / lambda`      (`lambda` of the notes; `= 2 pi / Lz`)
 - `bt   = cs^2 / vA^2`              (config `cs2_over_vA2`; `beta = 2 bt / gamma`)
 - `q    = -d ln Omega / d ln r`     (3/2 for Keplerian)
 - `Bhat = d ln B / d ln r`, `Phat = d ln p / d ln r`, `rhohat = d ln rho / d ln r`
@@ -227,11 +236,11 @@ def derived_parameters(params: Any) -> LowBetaAccretionParameters:
 def thin_ring_Lz(params: Any) -> float:
     """Return the normalised parallel box length of one full thin ring.
 
-    The thin-ring interpretation `Lz = 2 pi r` of the notes corresponds, in the
-    normalised parallel coordinate `z Omega / vA`, to `Lz = pi lambda`, i.e.
-    `2 pi / (vA/U)`. The solver treats `Lz` and `vA_over_U` as independent
-    inputs; this helper exists so a run can be checked against the thin-ring
-    interpretation if that is what is intended.
+    The thin-ring geometry `Lz = 2 pi r` corresponds, in the normalised
+    parallel coordinate `z Omega / vA`, to `Lz = pi lambda = 2 pi / (vA/U)`.
+    `Config` uses this relation in reverse, deriving `vA_over_U` from `Lz`, so
+    for any configuration that has not overridden `vA_over_U` this returns `Lz`
+    exactly. It is useful for checking a configuration that did override it.
     """
 
     mu = derived_parameters(params).mu

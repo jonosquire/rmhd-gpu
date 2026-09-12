@@ -440,7 +440,10 @@ Lz = 12.566370614359172
 cs2_over_vA2 = 0.6            # beta_tilde = cs^2/vA^2; plasma beta = 2 beta_tilde/gamma_ad
 gamma_ad = 1.6666666666666667
 q_shear = 1.5                 # -d ln Omega / d ln r; 3/2 for Keplerian
-vA_over_U = 0.3               # = 2/lambda; 0 gives the Kawazura et al. (2022) limit
+# vA_over_U is NOT set here: it is derived from Lz (= 2*pi/Lz), because the
+# parallel direction is the full circumference of a ring, Lz = 2*pi*r. Set it
+# explicitly only to break that tie, e.g. vA_over_U = 0.0 for the
+# straight-field Kawazura et al. (2022) limit.
 B_hat = -0.9                  # d ln B   / d ln r
 P_hat = -2.7                  # d ln p   / d ln r
 rho_hat = -1.3                # d ln rho / d ln r
@@ -466,10 +469,16 @@ Notes for this equation set:
 - `dbpar` and `drho` share a non-diagonal energy block, so give them the same
   dissipation coefficients; that is what keeps the compressive dissipation term
   negative definite.
-- The thin-ring reading of the model, `Lz = 2 pi r`, corresponds to
-  `Lz = 2 pi / vA_over_U` in these units. The solver treats `Lz` and
-  `vA_over_U` as independent; `low_beta_accretion.thin_ring_Lz(config)` returns
-  the thin-ring value if you want to match it.
+- The parallel box length is not free: the parallel direction is the full
+  circumference of a ring, `Lz = 2 pi r`, which in these units means
+  `Lz = 2 pi / (vA/U)`. So `vA_over_U` is **derived from `Lz`** rather than set,
+  and the two can never disagree. Setting `vA_over_U` explicitly overrides the
+  tie; that is how the straight-field `vA_over_U = 0` limit is selected.
+  `low_beta_accretion.thin_ring_Lz(config)` returns the tied value.
+- At low `beta` with `B_hat != -1` the instability becomes double-humped in
+  `k_par` and much stronger than the bare MRI, driven by the radial field
+  gradient (cf. Begelman & Armitage 2023). `B_hat = -1` is the natural control:
+  it is where `grad_perp ln B` cancels the curvature, switching that drive off.
 
 ## Example Inputs
 

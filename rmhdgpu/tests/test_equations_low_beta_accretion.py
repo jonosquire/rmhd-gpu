@@ -158,6 +158,43 @@ def test_derived_parameters_match_the_documented_definitions() -> None:
     assert lba.thin_ring_Lz(config) == pytest.approx(2.0 * np.pi / config.vA_over_U)
 
 
+def test_vA_over_U_is_tied_to_the_parallel_box_length() -> None:
+    """The disc geometry fixes Lz = 2 pi r, i.e. Lz = 2 pi / (vA/U) in these units.
+
+    `vA_over_U` is therefore derived from `Lz` rather than being an independent
+    input, so the two can never disagree.
+    """
+
+    for factor in (4.0, 5.0, 8.0):
+        config = _config(Lz=factor * np.pi, vA_over_U=None)
+        assert config.vA_over_U == pytest.approx(2.0 / factor)
+        assert lba.thin_ring_Lz(config) == pytest.approx(config.Lz)
+
+    # An explicit value overrides the tie; that is how the straight-field
+    # (Kawazura et al. 2022) limit is selected.
+    override = _config(Lz=4.0 * np.pi, vA_over_U=0.0)
+    assert override.vA_over_U == 0.0
+    assert lba.derived_parameters(override).mu == 0.0
+    assert lba.thin_ring_Lz(override) == float("inf")
+
+
+def test_example_input_leaves_vA_over_U_tied(tmp_path: Path) -> None:
+    """The shipped example must not set vA_over_U; it comes from Lz."""
+
+    text = (Path(__file__).resolve().parents[2] / "examples" / "low_beta_accretion.input").read_text(
+        encoding="utf-8"
+    )
+    assignments = [
+        line for line in text.splitlines()
+        if line.strip().startswith("vA_over_U") and "=" in line
+    ]
+    assert assignments == [], f"example should not assign vA_over_U; found {assignments}"
+
+    settings = resolve_run_settings(runfile_path=Path(__file__).resolve().parents[2]
+                                    / "examples" / "low_beta_accretion.input")
+    assert settings.config.vA_over_U == pytest.approx(2.0 * np.pi / settings.config.Lz)
+
+
 def test_invalid_physics_parameters_are_rejected() -> None:
     with pytest.raises(ValueError, match="gamma_ad"):
         _config(gamma_ad=1.0)

@@ -390,6 +390,13 @@ def _document_to_config_values(document: dict[str, Any]) -> dict[str, Any]:
     equations = _require_table(document, "equations")
     equation_set = str(equations.get("type", "s09"))
     config_values = default_config_dict_for_equation(equation_set)
+    # `vA_over_U` is normally derived from `Lz` (the thin-ring tie of the
+    # `low_beta_accretion` system). The default dict above already holds the
+    # value resolved against the *default* Lz, so drop it unless this document
+    # sets it explicitly; otherwise it would silently override the tie once the
+    # document's own Lz is applied.
+    if "vA_over_U" not in _require_table(document, "physics"):
+        config_values["vA_over_U"] = None
     for section_name in ("equations", "grid", "time", "output", "backend", "runtime", "physics", "forcing"):
         section_data = _require_table(document, section_name)
         _apply_section_to_config_dict(config_values, section_name, section_data)
