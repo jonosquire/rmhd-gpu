@@ -293,9 +293,9 @@ class ForcingState:
     last_by_branch: dict = field(init=False)
     event_count: int = field(init=False)
     diagnostic_hook: Any = field(init=False)
-    perpendicular_indices: Any = field(init=False, default=None)
-    measurement_mask: Any = field(init=False, default=None)
-    parallel_weights: Any = field(init=False, default=None)
+    perpendicular_indices: Any = field(init=False, repr=False)
+    measurement_mask: Any = field(init=False, repr=False)
+    parallel_weights: Any = field(init=False, repr=False)
 
 
 def create_control(config, grid, backend, equation, dealias_mask=None):
