@@ -373,9 +373,6 @@ python -m rmhdgpu.run examples/controlled_target_s09.input
 python -m rmhdgpu.run examples/controlled_power_alfvenic.input
 ```
 
-See [Controlled shell forcing](docs/controlled_forcing.md) for the algorithm,
-defaults, signed work diagnostics, equation-hook contract and validation.
-
 ### Dissipation
 
 For the low-beta stratified system, `N2` may be positive or negative. With the
