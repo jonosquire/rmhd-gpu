@@ -27,6 +27,7 @@ def context(velocity="omega", backend="numpy", *, power=False, scope="branch_tot
         forcing_branch_values=fields.standard_branch_values,
         forcing_apply_gain=fields.standard_apply_gain, forcing_seed_branch=fields.standard_seed_branch,
         forcing_characteristic_speed=fields.standard_characteristic_speed,
+        forcing_budget_work=fields.standard_budget_work,
         forcing_shell_density=fields.vorticity_shell_density,
         forcing_perpendicular_energy=fields.vorticity_perpendicular_energy,
         forcing_perpendicular_shell_energy=fields.vorticity_perpendicular_shell_energy,

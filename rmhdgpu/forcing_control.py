@@ -307,7 +307,7 @@ def create_control(config, grid, backend, equation, dealias_mask=None):
 
 def configure(control, config: Any, grid: Any, backend: Any, dealias_mask: Any | None = None) -> None:
     required = ("forcing_fields", "forcing_metric", "forcing_native_parameters", "forcing_energy_factors",
-                "forcing_branch_values", "forcing_apply_gain", "forcing_seed_branch", "forcing_characteristic_speed",
+                "forcing_branch_values", "forcing_apply_gain", "forcing_seed_branch", "forcing_characteristic_speed", "forcing_budget_work",
                 "forcing_shell_density", "forcing_perpendicular_energy", "forcing_perpendicular_shell_energy", "forcing_measurement")
     missing = [name for name in required if not callable(getattr(control.equation, name, None))]
     if missing:
