@@ -46,13 +46,13 @@ def add_potential_increment(state, grid, potential, *, branch, velocity, magneti
         if velocity == "phi":
             state[velocity][...] += (0.5 * scale) * potential
         else:
-            state[velocity][...] += (0.5 * scale) * (-grid.kperp2 * potential)
+            state[velocity][...] -= (0.5 * scale) * grid.kperp2 * potential
     else:
         state[magnetic].reshape(-1)[selection] += psi_sign * scale * potential
         if velocity == "phi":
             state[velocity].reshape(-1)[selection] += (0.5 * scale) * potential
         else:
-            state[velocity].reshape(-1)[selection] += (0.5 * scale) * (-selected_kperp2(grid, selection) * potential)
+            state[velocity].reshape(-1)[selection] -= (0.5 * scale) * selected_kperp2(grid, selection) * potential
 
 
 def standard_metric(config):
