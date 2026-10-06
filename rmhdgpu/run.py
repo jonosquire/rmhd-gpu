@@ -23,7 +23,7 @@ from rmhdgpu.diagnostics.scalar import compute_scalar_diagnostics
 from rmhdgpu.errors import NonFiniteStateError
 from rmhdgpu.equations import available_equation_sets, get_equation_module
 from rmhdgpu.fft import FFTManager
-from rmhdgpu.controlled_forcing import build_controlled_forcing
+from rmhdgpu import forcing_control
 from rmhdgpu.forcing import apply_forcing_kick, generate_forcing_kick
 from rmhdgpu.grid import build_grid
 from rmhdgpu.initconds import build_initial_state, list_initial_condition_types
@@ -341,10 +341,13 @@ def run_simulation(settings: RunSettings, *, observer=None) -> dict[str, Any]:
             field_names=settings.config.field_names,
             params=settings.config,
         )
-        controlled_forcing = build_controlled_forcing(config, state, mask)
+        controlled_forcing = None
+        if config.use_forcing and config.forcing_type == "controlled_shell":
+            controlled_forcing = forcing_control.create_control(config, grid, backend, equation_module, mask)
+            forcing_control.initialize(controlled_forcing, state)
         forcing_event_writer = None
         if controlled_forcing is not None:
-            controlled_forcing.write_metadata(output_dir)
+            forcing_control.write_metadata(controlled_forcing, output_dir)
             forcing_event_writer = ScalarDiagnosticsWriter(output_dir / "forcing_events.csv")
         auto_dissipation_controller = None
         auto_dissipation_diagnostics = disabled_auto_dissipation_diagnostics()
@@ -481,7 +484,7 @@ def run_simulation(settings: RunSettings, *, observer=None) -> dict[str, Any]:
                     linear_ops=linear_ops,
                     budget_rhs_terms=_averaged_budget_terms(),
                     extra_scalar_diagnostics={**auto_dissipation_diagnostics,
-                        **({} if controlled_forcing is None else controlled_forcing.diagnostics(state))},
+                        **({} if controlled_forcing is None else forcing_control.diagnostics(controlled_forcing, state))},
                 )
                 scalar_writer.write_row(row)
                 logger.event(
@@ -588,7 +591,7 @@ def run_simulation(settings: RunSettings, *, observer=None) -> dict[str, Any]:
                 events = []
                 if controlled_forcing is not None:
                     state = stepped_state
-                    events = controlled_forcing.advance(state, dt, t+dt, final=t+dt >= config.tmax-1e-15)
+                    events = forcing_control.advance(controlled_forcing, state, dt, t+dt, final=t+dt >= config.tmax-1e-15)
                     for event in events:
                         forcing_event_writer.write_row(event)
                         if track_budget:

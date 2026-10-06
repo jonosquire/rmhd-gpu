@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from rmhdgpu.controlled_forcing import ControlledShellSettings, native_branch_parameters
+from rmhdgpu.forcing_control import ControlledShellSettings
 
 
 DEFAULT_EQUATION_SET = "s09"
@@ -457,7 +457,7 @@ class Config:
                 raise ValueError("Controlled forcing_seed must be nonnegative.")
             for branch in self.controlled_shell.branches:
                 spec = getattr(self.controlled_shell, branch)
-                native = native_branch_parameters(spec, self, branch)
+                native = equation_module.forcing_native_parameters(spec, self, branch)
                 spec.gamma_max = native["gamma_max"]
                 if spec.control == "target":
                     spec.tau_F = native["tau_F"]

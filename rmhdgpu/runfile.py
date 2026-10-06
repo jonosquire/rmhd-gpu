@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from rmhdgpu.controlled_forcing import settings_document
+from rmhdgpu.forcing_control import settings_document
 from rmhdgpu.config import Config, default_config_dict_for_equation
 from rmhdgpu.equations import get_equation_module
 from rmhdgpu.initconds import normalize_initial_condition_parameters
