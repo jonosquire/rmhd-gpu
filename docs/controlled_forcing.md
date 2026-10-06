@@ -209,5 +209,32 @@ The portable numerical source was first validated in rmhd-gpu-squish at
 `b79f3e3`: 451 focused checks on an A100, five complete bitwise legacy trajectory
 comparisons and cross-source continuation passed. An isolated original-repository
 port preview passed 51 CPU tests. That history supports the shared algorithm;
-the assembled upstream branch is checked separately using the commands above.
+the assembled upstream branch was also checked separately as follows.
+
+### Assembled-port results
+
+Source `0b331d7` passed **133 regression tests, with no skips or failures**, on
+one NVIDIA A100 80 GB PCIe allocation. The tests exercised NumPy 2.3.3, SciPy
+1.16.2 and CuPy 13.6.0 under Python 3.12.14. The controller, shared field algebra
+and compatibility facade were byte-for-byte identical to the validated squash
+versions. Both supplied evolving examples passed on CuPy/float64:
+
+| Measurement | S09 target | Balanced Alfvénic power |
+|---|---:|---:|
+| PDE steps | 18,326 | 100 |
+| Final code time | 36.65191429188092 ($7\tau_A$) | 0.2 |
+| Maximum budget residual / initial energy | $3.54\times10^{-6}$ | $1.60\times10^{-9}$ |
+| Cap / floor events | 0 / 0 | 0 / 0 |
+
+S09 finished at plus RMS 0.199580502680 for a target of 0.2, consistent with
+finite-time relaxation from its startup RMS of 0.02. Its maximum logarithmic
+relaxation error was $7.17\times10^{-9}$ and maximum sampled minus RMS was
+$1.09\times10^{-15}$. Compressive and entropy fields were exactly zero at the
+endpoint. Balanced power delivered total work 0.000800000000000120 against
+the requested 0.0008; the worst per-event relative power error was
+$2.39\times10^{-12}$. Both examples flushed the final interval and passed the
+independent energy-normalization checks.
+
+These checks establish the specified forcing response and work bookkeeping;
+they do not establish turbulent stationarity or resolution convergence.
 Detailed job products stay outside Git. No production campaign is part of this port.
