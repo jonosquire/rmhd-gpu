@@ -6,6 +6,7 @@ energy <|grad zeta|**2>/4. Upstream stochastic epsilon uses twice that energy;
 this module changes fields, never the caller's energy normalization.
 """
 from __future__ import annotations
+from typing import Any
 
 
 def select(array, selection):
@@ -103,3 +104,62 @@ def standard_characteristic_speed(config, branch):
 
 def standard_budget_work(event):
     return {"total_energy": event["work_z"]}
+
+
+# Quadratic energy measurements for native branch vorticities. Equation modules
+# explicitly opt into these definitions; the controller does not guess them.
+def vorticity_shell_density(control, state: Any, branch: str) -> Any:
+    xp = control.backend.xp
+    field = control.equation.forcing_branch_values(control, state, branch, control.indices)
+    return control.weights * xp.abs(field)**2
+
+def vorticity_perpendicular_energy(control, state: Any, branch: str, *, nonzero_kz: bool = False) -> Any:
+    """Reduce over kz using only Nx*Ny scratch, not full-volume temporaries."""
+    xp = control.backend.xp
+    density = xp.zeros((control.grid.Nx, control.grid.Ny), dtype=control.grid.real_dtype)
+    # Config requires even Nz, so the last stored plane is the Nyquist plane.
+    for iz in range(1 if nonzero_kz else 0, control.grid.Nz//2+1):
+        density += (1 if iz in (0, control.grid.Nz//2) else 2) * xp.abs(control.equation.forcing_branch_values(control, state, branch, (slice(None), slice(None), iz)))**2
+    density *= control.inv_delta / (4*control.normalization)
+    return density
+
+def vorticity_perpendicular_shell_energy(control, state: Any, branch: str) -> float:
+    """Measure the perpendicular actuator band across every retained kz.
+
+    Sparse perpendicular tiles keep scratch no larger than one grid plane
+    (or one parallel column). Only the final scalar leaves the backend.
+    """
+    xp = control.backend.xp
+    ix, iy = control.perpendicular_indices
+    tile = max(1, control.grid.Nx*control.grid.Ny // (control.grid.Nz//2+1))
+    energy = xp.zeros((), dtype=control.grid.real_dtype)
+    for start in range(0, control.mode_count, tile):
+        rows = slice(start, start+tile)
+        density = xp.abs(control.equation.forcing_branch_values(control, state, branch, (ix[rows], iy[rows], slice(None))))**2
+        density *= control.weights[rows, None]/2
+        density *= control.parallel_weights[None, :]
+        if control.measurement_mask is not None:
+            density *= control.measurement_mask[ix[rows], iy[rows], :]
+        energy += xp.sum(density)
+    return control.backend.scalar_to_float(energy)
+
+def vorticity_measurement(control, state: Any, branch: str) -> tuple[Any, float | None, float | None]:
+    """Return total perpendicular density and optional feedback measurements.
+
+    Sum nonzero modes directly before adding the zero plane: subtracting
+    zero-mode energy from a much larger total could erase the feedback.
+    Legacy scopes keep their reduction order. Perpendicular-shell feedback
+    measures the retained band separately, without subtracting large powers.
+    """
+    spec = getattr(control.settings, branch)
+    exclude_zero = spec is not None and spec.target_scope == "branch_nonzero_kz"
+    density = vorticity_perpendicular_energy(control, state, branch, nonzero_kz=exclude_zero)
+    nonzero = None
+    if exclude_zero:
+        xp = control.backend.xp
+        nonzero = control.backend.scalar_to_float(xp.sum(density))
+        zero = control.equation.forcing_branch_values(control, state, branch, (slice(None), slice(None), 0))
+        density += xp.abs(zero)**2 * control.inv_delta / (4*control.normalization)
+    perpendicular = (vorticity_perpendicular_shell_energy(control, state, branch)
+                     if spec is not None and spec.target_scope == "perpendicular_shell" else None)
+    return density, nonzero, perpendicular

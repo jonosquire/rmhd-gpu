@@ -307,7 +307,8 @@ def create_control(config, grid, backend, equation, dealias_mask=None):
 
 def configure(control, config: Any, grid: Any, backend: Any, dealias_mask: Any | None = None) -> None:
     required = ("forcing_fields", "forcing_metric", "forcing_native_parameters", "forcing_energy_factors",
-                "forcing_branch_values", "forcing_apply_gain", "forcing_seed_branch", "forcing_characteristic_speed")
+                "forcing_branch_values", "forcing_apply_gain", "forcing_seed_branch", "forcing_characteristic_speed",
+                "forcing_shell_density", "forcing_perpendicular_energy", "forcing_perpendicular_shell_energy", "forcing_measurement")
     missing = [name for name in required if not callable(getattr(control.equation, name, None))]
     if missing:
         raise ValueError(f"Equation does not support controlled forcing; missing hooks: {missing}.")
@@ -378,72 +379,28 @@ def configure(control, config: Any, grid: Any, backend: Any, dealias_mask: Any |
     control.diagnostic_hook = None
 
 
-def shell_density(control, state: Any, branch: str) -> Any:
-    xp = control.backend.xp
-    field = control.equation.forcing_branch_values(control, state, branch, control.indices)
-    return control.weights * xp.abs(field)**2
+def shell_density(control, state: Any, branch: str):
+    return control.equation.forcing_shell_density(control, state, branch)
 
 
 def shell_energy(control, state: Any, branch: str) -> float:
     return control.backend.scalar_to_float(control.backend.xp.sum(shell_density(control, state, branch)))
 
 
-def perpendicular_energy(control, state: Any, branch: str, *, nonzero_kz: bool = False) -> Any:
-    """Reduce over kz using only Nx*Ny scratch, not full-volume temporaries."""
-    xp = control.backend.xp
-    density = xp.zeros((control.grid.Nx, control.grid.Ny), dtype=control.grid.real_dtype)
-    # Config requires even Nz, so the last stored plane is the Nyquist plane.
-    for iz in range(1 if nonzero_kz else 0, control.grid.Nz//2+1):
-        density += (1 if iz in (0, control.grid.Nz//2) else 2) * xp.abs(control.equation.forcing_branch_values(control, state, branch, (slice(None), slice(None), iz)))**2
-    density *= control.inv_delta / (4*control.normalization)
-    return density
+def perpendicular_energy(control, state: Any, branch: str, *, nonzero_kz: bool=False):
+    return control.equation.forcing_perpendicular_energy(control, state, branch, nonzero_kz=nonzero_kz)
 
 
 def branch_energy(control, state: Any, branch: str) -> float:
     return control.backend.scalar_to_float(control.backend.xp.sum(perpendicular_energy(control, state, branch)))
 
 
-def perpendicular_shell_energy(control, state: Any, branch: str) -> float:
-    """Measure the perpendicular actuator band across every retained kz.
-
-    Sparse perpendicular tiles keep scratch no larger than one grid plane
-    (or one parallel column). Only the final scalar leaves the backend.
-    """
-    xp = control.backend.xp
-    ix, iy = control.perpendicular_indices
-    tile = max(1, control.grid.Nx*control.grid.Ny // (control.grid.Nz//2+1))
-    energy = xp.zeros((), dtype=control.grid.real_dtype)
-    for start in range(0, control.mode_count, tile):
-        rows = slice(start, start+tile)
-        density = xp.abs(control.equation.forcing_branch_values(control, state, branch, (ix[rows], iy[rows], slice(None))))**2
-        density *= control.weights[rows, None]/2
-        density *= control.parallel_weights[None, :]
-        if control.measurement_mask is not None:
-            density *= control.measurement_mask[ix[rows], iy[rows], :]
-        energy += xp.sum(density)
-    return control.backend.scalar_to_float(energy)
+def perpendicular_shell_energy(control, state: Any, branch: str):
+    return control.equation.forcing_perpendicular_shell_energy(control, state, branch)
 
 
-def _energy_measurement(control, state: Any, branch: str) -> tuple[Any, float | None, float | None]:
-    """Return total perpendicular density and optional feedback measurements.
-
-    Sum nonzero modes directly before adding the zero plane: subtracting
-    zero-mode energy from a much larger total could erase the feedback.
-    Legacy scopes keep their reduction order. Perpendicular-shell feedback
-    measures the retained band separately, without subtracting large powers.
-    """
-    spec = getattr(control.settings, branch)
-    exclude_zero = spec is not None and spec.target_scope == "branch_nonzero_kz"
-    density = perpendicular_energy(control, state, branch, nonzero_kz=exclude_zero)
-    nonzero = None
-    if exclude_zero:
-        xp = control.backend.xp
-        nonzero = control.backend.scalar_to_float(xp.sum(density))
-        zero = control.equation.forcing_branch_values(control, state, branch, (slice(None), slice(None), 0))
-        density += xp.abs(zero)**2 * control.inv_delta / (4*control.normalization)
-    perpendicular = (perpendicular_shell_energy(control, state, branch)
-                     if spec is not None and spec.target_scope == "perpendicular_shell" else None)
-    return density, nonzero, perpendicular
+def _energy_measurement(control, state: Any, branch: str):
+    return control.equation.forcing_measurement(control, state, branch)
 
 
 def initialize(control, state: Any) -> None:

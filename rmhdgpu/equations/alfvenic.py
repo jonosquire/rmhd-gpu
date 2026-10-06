@@ -474,6 +474,10 @@ from rmhdgpu.forcing_fields import (
     standard_seed_branch as forcing_seed_branch,
     standard_characteristic_speed as forcing_characteristic_speed,
     standard_budget_work as forcing_budget_work,
+    vorticity_shell_density as forcing_shell_density,
+    vorticity_perpendicular_energy as forcing_perpendicular_energy,
+    vorticity_perpendicular_shell_energy as forcing_perpendicular_shell_energy,
+    vorticity_measurement as forcing_measurement,
 )
 
 
