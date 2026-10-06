@@ -171,25 +171,11 @@ forcing_seed = 91
     assert "force_amplitudes" not in settings.resolved_document["forcing"]
 
 
-def test_legacy_force_amplitudes_warns_and_uses_epsilon_semantics(tmp_path) -> None:
-    input_file = tmp_path / "legacy_forcing.input"
-    input_file.write_text(
-        """
-[forcing]
-use_forcing = true
-
-[forcing.force_amplitudes]
-psi = 0.25
-""".strip()
-        + "\n",
-        encoding="utf-8",
-    )
-
-    with pytest.warns(FutureWarning, match="energy injection rates"):
-        settings = resolve_run_settings(runfile_path=input_file)
-
-    assert settings.config.field_energy_injection_rates["psi"] == 0.25
-    assert "field_energy_injection_rates" in settings.resolved_document["forcing"]
+def test_legacy_force_amplitudes_is_rejected(tmp_path) -> None:
+    path = tmp_path / "legacy.input"
+    path.write_text("[forcing.force_amplitudes]\npsi = 0.1\nomega = 0.2\n")
+    with pytest.raises(ValueError, match="force_amplitudes"):
+        resolve_run_settings(runfile_path=path)
 
 
 def test_initial_condition_parameter_table_parses_and_overrides_defaults(tmp_path) -> None:

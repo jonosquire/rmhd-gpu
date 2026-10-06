@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from rmhdgpu.controlled_forcing import build_controlled_forcing
 from rmhdgpu.forcing import apply_forcing_kick, generate_forcing_kick
 from rmhdgpu.state import State
 from rmhdgpu.utils import check_state_finite
@@ -391,8 +392,9 @@ def evolve_until(
     progress_output_every = getattr(params_obj, "progress_output_every", None)
 
     current = state
+    controlled_forcing = build_controlled_forcing(params_obj, current, kwargs.get("dealias_mask"))
     forcing_rng_obj = forcing_rng
-    if getattr(params_obj, "use_forcing", False) and forcing_rng_obj is None:
+    if getattr(params_obj, "use_forcing", False) and controlled_forcing is None and forcing_rng_obj is None:
         forcing_rng_obj = current.backend.random_generator(getattr(params_obj, "forcing_seed", None))
 
     t = 0.0
@@ -419,7 +421,9 @@ def evolve_until(
 
         dt = min(dt, t_final - t)
         current = stepper_func(current, dt, ideal_rhs_func, linear_ops, rhs_kwargs=kwargs)
-        if getattr(params_obj, "use_forcing", False):
+        if controlled_forcing is not None:
+            controlled_forcing.advance(current, dt, t+dt, final=t+dt >= t_final-1e-15)
+        elif getattr(params_obj, "use_forcing", False):
             forcing_kick = generate_forcing_kick(
                 current,
                 grid,
@@ -460,4 +464,6 @@ def evolve_until(
         "steps": steps,
         "dt_last": 0.0 if dt_prev is None else dt_prev,
     }
+    if controlled_forcing is not None:
+        info.update(controlled_forcing.diagnostics(current))
     return current, info
