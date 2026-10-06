@@ -178,6 +178,12 @@ def test_legacy_force_amplitudes_is_rejected(tmp_path) -> None:
         resolve_run_settings(runfile_path=path)
 
 
+def test_removed_force_sigma_cli_is_rejected() -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        build_parser().parse_args(["--force-sigma", "0.1"])
+    assert excinfo.value.code == 2
+
+
 def test_initial_condition_parameter_table_parses_and_overrides_defaults(tmp_path) -> None:
     input_file = tmp_path / "initcond_parameters.input"
     input_file.write_text(

@@ -14,7 +14,7 @@ Current solver scope includes:
 - anisotropic dissipation with integrating-factor time stepping
 - optional auto-dissipation with one common adaptive perpendicular coefficient
 - variable timestep support
-- stochastic forcing
+- stochastic forcing and controlled Alfvénic shell forcing
 - persistent scalar, spectral, and full-field diagnostics
 - NumPy, SciPy CPU, and CuPy backends
 - tests plus lightweight profiling utilities
@@ -212,14 +212,20 @@ Supported sections are:
 - `[backend]`: `backend`, `fft_workers`, `real_dtype`, `complex_dtype`
 - `[runtime]`: `runtime_check_every`, `progress_output_every`, `fail_on_nonfinite`, `dealias`, `dealias_mode`
 - `[physics]`: `vA`, `cs2_over_vA2`, `N2`
-- `[forcing]` and `[forcing.field_energy_injection_rates]`
+- `[forcing]`, `[forcing.field_energy_injection_rates]`, and `[forcing.controlled_shell]`
 - `[dissipation]` for optional auto-dissipation control
 - `[dissipation.<field>]` for manual per-field dissipation
 - `[initial_condition]`
 
 ### Forcing
 
-The forcing is additive Gaussian noise refreshed every timestep. It is built
+Choose `type = "stochastic"` (the default) for prescribed mean injection rates,
+or `type = "controlled_shell"` for target-amplitude or constant-power control
+of selected Alfvénic branches. These are separate forcing modes.
+
+#### Stochastic forcing
+
+Stochastic forcing is additive Gaussian noise refreshed every timestep. It is built
 from a real, unit-variance Gaussian field, filtered to the integer-mode shell
 `n_min_force <= sqrt(nx^2 + ny^2 + nz^2) <= n_max_force`, and shaped in
 Fourier amplitude as `n^(-alpha_force)`. Here `alpha_force` controls only the
@@ -316,11 +322,59 @@ resolution, and preferably multiple seeds. Reproduce or modify this check with:
 python -m rmhdgpu.examples.sanity_imbalanced_forcing
 ```
 
-Legacy warning: `[forcing.force_amplitudes]` is accepted temporarily as a
-deprecated alias, but its values are now interpreted as energy injection rates
-with the `epsilon` normalization above, not as the old raw field amplitudes.
-New input files should always use `[forcing.field_energy_injection_rates]` or
-the Elsasser `epsilon_plus` and `epsilon_minus` settings.
+`[forcing.force_amplitudes]` and the removed `--force-sigma` option are rejected.
+Specify `[forcing.field_energy_injection_rates]` or the Elsasser `epsilon_plus`
+and `epsilon_minus` settings explicitly. Old amplitude values are not silently
+reinterpreted as powers; historical stochastic runs require their pinned source.
+
+#### Controlled shell forcing
+
+Controlled forcing rescales one branch in a perpendicular Fourier band at a
+selected nonzero parallel harmonic. It supports the `alfvenic`, `s09`, and
+`low_beta_stratified` equations. A plus-only control changes `phi - psi` while
+preserving `phi + psi` to roundoff, including an already nonzero minus branch.
+
+For example, control the physical plus RMS towards 0.2:
+
+```toml
+[forcing]
+type = "controlled_shell"
+use_forcing = true
+forcing_seed = 53
+
+[forcing.controlled_shell]
+k_sigma_min = 2.0
+k_sigma_max = 3.0
+kz_index = 1
+branches = ["plus"]
+
+[forcing.controlled_shell.plus]
+control = "target"
+target_basis = "elsasser"
+target_quantity = "rms"
+target_scope = "perpendicular_shell"
+target_value = 0.2
+tau_F = 1.0
+```
+
+The target is a relaxation reference, not an exact amplitude constraint.
+`perpendicular_shell` measures the band across all retained parallel modes;
+only the selected parallel harmonic receives forcing. Use `branch_total`,
+`branch_nonzero_kz`, or `shell` for the other measurement scopes.
+
+Controlled branch energy is `mean(|z±|²)/4`, half the existing stochastic
+Elsasser-energy convention. Controlled constant-power values therefore need
+that factor of two when compared with stochastic `epsilon_plus/minus`.
+
+Runnable examples:
+
+```bash
+python -m rmhdgpu.run examples/controlled_target_s09.input
+python -m rmhdgpu.run examples/controlled_power_alfvenic.input
+```
+
+See [Controlled shell forcing](docs/controlled_forcing.md) for the algorithm,
+defaults, signed work diagnostics, equation-hook contract and validation.
 
 ### Dissipation
 

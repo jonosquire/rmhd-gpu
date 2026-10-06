@@ -1,5 +1,6 @@
 """The ordinary input/driver path can control standard Alfvénic branches."""
 import csv
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -45,6 +46,9 @@ def test_both_standard_runners_and_signed_energy_work(tmp_path, monkeypatch, equ
             final.update({name: kw["backend"].to_numpy(kw["state"][name]).copy()
                           for name in kw["state"].field_names})
     run_simulation(settings, observer=observe)
+    assert len(events) == 3
+    assert [event["interval"] for event in events] == [3/1024, 3/1024, 2/1024]
+    assert events[-1]["time"] == settings.config.tmax
     config = settings.config
     backend = build_backend(config)
     grid = build_grid(config, backend)
@@ -73,4 +77,35 @@ def test_no_implicit_wave_action_units_for_standard_equation(tmp_path):
         type="controlled_shell", use_forcing=True, controlled_shell=dict(k_sigma_min=2., k_sigma_max=3.,
             branches=["plus"], plus=dict(control="constant_power", power_basis="wave_action", epsilon=.001))))))
     with pytest.raises(ValueError, match="not wave_action"):
+        resolve_run_settings(runfile_path=path)
+
+
+@pytest.mark.parametrize("example", ["controlled_target_s09", "controlled_power_alfvenic"])
+def test_controlled_examples_round_trip_resolved_inputs(tmp_path, example):
+    """A saved resolved document remains a complete, equivalent run input."""
+    root = Path(__file__).resolve().parents[2]
+    settings = resolve_run_settings(runfile_path=root / "examples" / f"{example}.input")
+    path = tmp_path / "resolved.input"
+    path.write_text(dump_toml(settings.resolved_document))
+    restored = resolve_run_settings(runfile_path=path)
+    assert restored.config.controlled_shell == settings.config.controlled_shell
+    assert restored.config.forcing_seed == settings.config.forcing_seed
+    assert restored.config.equation_set == settings.config.equation_set
+    assert restored.config.equation_mode == "nonlinear"
+    assert restored.config.tmax == settings.config.tmax
+    assert restored.resolved_document["forcing"] == settings.resolved_document["forcing"]
+
+
+@pytest.mark.parametrize("stochastic", [
+    {"epsilon_plus": 0.0}, {"forcing_mode": "elsasser"},
+    {"field_energy_injection_rates": {"psi": 0.0}},
+])
+def test_controlled_inputs_reject_explicit_stochastic_settings(tmp_path, stochastic):
+    root = Path(__file__).resolve().parents[2]
+    settings = resolve_run_settings(runfile_path=root / "examples/controlled_target_s09.input")
+    document = settings.resolved_document
+    document["forcing"].update(stochastic)
+    path = tmp_path / "mixed.input"
+    path.write_text(dump_toml(document))
+    with pytest.raises(ValueError, match="Stochastic settings are incompatible"):
         resolve_run_settings(runfile_path=path)

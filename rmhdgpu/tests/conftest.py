@@ -10,9 +10,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-@pytest.fixture(params=("numpy", "cupy"))
+@pytest.fixture(params=("numpy", "scipy_cpu", "cupy"))
 def production_backend(request):
-    """Exercise controlled forcing on CPU and a real GPU when available."""
+    """Exercise controlled forcing on each installed production backend."""
+    if request.param == "scipy_cpu":
+        pytest.importorskip("scipy")
     if request.param == "cupy":
         cp = pytest.importorskip("cupy")
         try:
