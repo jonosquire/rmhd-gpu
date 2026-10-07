@@ -461,3 +461,27 @@ def compute_equation_scalar_diagnostics(
     rhs_terms.setdefault("forcing", 0.0)
     diagnostics.update(flatten_conserved_quantity_budgets(budgets))
     return diagnostics
+
+
+# Controlled forcing acts on the Alfvénic pair only. The equation declares
+# storage here; the shared helpers never guess a different equation's fields.
+from rmhdgpu.forcing_fields import (
+    standard_metric as forcing_metric,
+    standard_native_parameters as forcing_native_parameters,
+    standard_energy_factors as forcing_energy_factors,
+    standard_branch_values as forcing_branch_values,
+    standard_apply_gain as forcing_apply_gain,
+    standard_seed_branch as forcing_seed_branch,
+    standard_characteristic_speed as forcing_characteristic_speed,
+    standard_budget_work as forcing_budget_work,
+    vorticity_shell_density as forcing_shell_density,
+    vorticity_perpendicular_energy as forcing_perpendicular_energy,
+    vorticity_perpendicular_shell_energy as forcing_perpendicular_shell_energy,
+    vorticity_measurement as forcing_measurement,
+)
+
+
+def forcing_fields(config):
+    """Map controlled Elsasser branches to this module's evolved fields."""
+    from rmhdgpu.forcing_fields import alfvenic_fields
+    return alfvenic_fields(config, velocity="omega", magnetic="psi")

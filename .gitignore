@@ -4,3 +4,6 @@ sanity_plots/*
 quick_tests/*
 *.pyc
 .codex
+/output/
+/examples/outputs/
+/docs/

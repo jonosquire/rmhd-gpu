@@ -43,6 +43,7 @@ import numpy as np
 
 from rmhdgpu.fourier_diagnostics import modal_average
 from rmhdgpu.state import State
+from rmhdgpu.forcing_fields import add_potential_increment
 
 
 def mode_number_magnitude(grid: Any, backend: Any) -> Any:
@@ -301,27 +302,6 @@ def _expected_elsasser_noise_energy(shaping: Any, grid: Any, backend: Any) -> fl
     return energy
 
 
-def _add_velocity_potential_kick(
-    kick: State,
-    potential_hat: Any,
-    grid: Any,
-    coefficient: float,
-) -> None:
-    """Add a ``phi`` kick for direct-``phi`` or vorticity storage."""
-
-    if "phi" in kick.field_names:
-        kick["phi"][...] += coefficient * potential_hat
-        return
-    if "omega" in kick.field_names:
-        # omega = lap_perp(phi) = -k_perp^2 phi.
-        kick["omega"][...] -= coefficient * grid.kperp2 * potential_hat
-        return
-    raise ValueError(
-        "Elsasser forcing requires the velocity potential to be stored as either "
-        "'phi' or 'omega'."
-    )
-
-
 def _add_elsasser_forcing(
     kick: State,
     grid: Any,
@@ -377,10 +357,9 @@ def _add_elsasser_forcing(
         scale = float(np.sqrt(epsilon * dt / expected_energy))
 
         # zeta+ = phi - psi and zeta- = phi + psi, hence
-        # phi = (zeta+ + zeta-)/2 and psi = (zeta- - zeta+)/2.
-        psi_sign = -0.5 if branch == "plus" else 0.5
-        kick["psi"][...] += psi_sign * scale * xi_hat
-        _add_velocity_potential_kick(kick, xi_hat, grid, 0.5 * scale)
+        add_potential_increment(kick, grid, xi_hat, branch=branch,
+                                velocity="phi" if "phi" in kick.field_names else "omega", scale=scale)
+
 
 
 def generate_forcing_kick(

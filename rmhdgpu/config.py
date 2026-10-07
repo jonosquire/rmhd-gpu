@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from rmhdgpu.forcing_control import ControlledShellSettings
+
 
 DEFAULT_EQUATION_SET = "s09"
 DEFAULT_EQUATION_MODE = "nonlinear"
@@ -155,6 +157,8 @@ class Config:
     cs2_over_vA2: float = 1.0
     N2: float = 1.0
     use_forcing: bool = False
+    forcing_type: str = "stochastic"
+    controlled_shell: ControlledShellSettings | dict[str, Any] | None = None
     forcing_mode: str = "field"
     n_min_force: float = 1.0
     n_max_force: float = 3.0
@@ -424,6 +428,41 @@ class Config:
             cleaned_dissipation[field_name] = entry
 
         self.dissipation = cleaned_dissipation
+
+        if self.forcing_type not in {"stochastic", "controlled_shell"}:
+            raise ValueError("forcing_type must be 'stochastic' or 'controlled_shell'.")
+        if self.forcing_type == "stochastic":
+            if self.controlled_shell is not None:
+                raise ValueError("controlled_shell settings require forcing_type='controlled_shell'.")
+        else:
+            if not callable(getattr(equation_module, "forcing_fields", None)):
+                raise ValueError("controlled_shell forcing only supports equations with declared forcing hooks.")
+            equation_module.forcing_fields(self)
+            if isinstance(self.controlled_shell, dict):
+                try:
+                    self.controlled_shell = ControlledShellSettings(**deepcopy(self.controlled_shell))
+                except TypeError as exc:
+                    raise ValueError(f"Invalid controlled_shell settings: {exc}") from exc
+            elif not isinstance(self.controlled_shell, ControlledShellSettings):
+                raise ValueError("controlled_shell forcing requires an explicit settings table.")
+            else:
+                self.controlled_shell = deepcopy(self.controlled_shell)
+            if (any(self.field_energy_injection_rates.values()) or self.forcing_mode != "field" or self.epsilon_plus or self.epsilon_minus) or (self.n_min_force, self.n_max_force, self.alpha_force) != (1.0, 3.0, 0.0):
+                raise ValueError("Stochastic forcing settings are incompatible with controlled_shell forcing.")
+            if not 1 <= self.controlled_shell.kz_index < self.Nz//2:
+                raise ValueError("kz_index must exclude zero and Nyquist: 1 <= kz_index < Nz/2.")
+            if self.forcing_seed is None:
+                self.forcing_seed = 0
+            if self.forcing_seed < 0:
+                raise ValueError("Controlled forcing_seed must be nonnegative.")
+            for branch in self.controlled_shell.branches:
+                spec = getattr(self.controlled_shell, branch)
+                native = equation_module.forcing_native_parameters(spec, self, branch)
+                spec.gamma_max = native["gamma_max"]
+                if spec.control == "target":
+                    spec.tau_F = native["tau_F"]
+            if self.controlled_shell.interval_max is None:
+                self.controlled_shell.interval_max = 0.1/(2*np.pi*self.controlled_shell.kz_index/self.Lz*self.vA)
 
 
 def config_to_dict(config: Config) -> dict[str, Any]:

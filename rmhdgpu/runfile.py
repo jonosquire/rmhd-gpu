@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 import math
-import warnings
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from rmhdgpu.forcing_control import settings_document
 from rmhdgpu.config import Config, default_config_dict_for_equation
 from rmhdgpu.equations import get_equation_module
 from rmhdgpu.initconds import normalize_initial_condition_parameters
@@ -67,7 +67,7 @@ _SECTION_KEYS = {
         "epsilon_plus",
         "epsilon_minus",
         "field_energy_injection_rates",
-        "force_amplitudes",
+        "force_amplitudes", "type", "controlled_shell",
     },
 }
 _AUTO_DISSIPATION_KEYS = {
@@ -190,6 +190,19 @@ def _require_table(data: dict[str, Any], section: str) -> dict[str, Any]:
     return value
 
 
+def _validate_forcing_document(forcing):
+    if "force_amplitudes" in forcing:
+        raise ValueError("forcing.force_amplitudes was removed: specify energy injection rates explicitly; old stochastic runs require their historical source.")
+    if forcing.get("type") == "controlled_shell":
+        conflicting = set(forcing) & {"n_min_force", "n_max_force", "alpha_force", "forcing_mode",
+                                      "epsilon_plus", "epsilon_minus", "field_energy_injection_rates"}
+        if conflicting:
+            raise ValueError(f"Stochastic settings are incompatible with controlled_shell: {sorted(conflicting)}.")
+    rates = forcing.get("field_energy_injection_rates", {})
+    if rates is not None and not isinstance(rates, dict):
+        raise ValueError("forcing.field_energy_injection_rates must be a TOML table.")
+
+
 def load_run_file(path: str | Path) -> dict[str, Any]:
     """Load a `.input` file using TOML syntax."""
 
@@ -230,15 +243,7 @@ def load_run_file(path: str | Path) -> dict[str, Any]:
         raise ValueError("initial_condition must be a TOML table.")
 
     forcing = _require_table(data, "forcing")
-    for table_name in ("field_energy_injection_rates", "force_amplitudes"):
-        table = forcing.get(table_name, {})
-        if table is not None and not isinstance(table, dict):
-            raise ValueError(f"forcing.{table_name} must be a TOML table.")
-    if "field_energy_injection_rates" in forcing and "force_amplitudes" in forcing:
-        raise ValueError(
-            "Specify only forcing.field_energy_injection_rates. The legacy "
-            "forcing.force_amplitudes table is accepted only as a deprecated alias."
-        )
+    _validate_forcing_document(forcing)
 
     dissipation = data.get("dissipation", {})
     if dissipation is not None and not isinstance(dissipation, dict):
@@ -386,16 +391,9 @@ def _document_to_config_values(document: dict[str, Any]) -> dict[str, Any]:
 
     forcing = _require_table(document, "forcing")
     field_rates = forcing.get("field_energy_injection_rates")
-    legacy_rates = forcing.get("force_amplitudes")
-    if legacy_rates is not None:
-        warnings.warn(
-            "[forcing.force_amplitudes] is deprecated. Values are now interpreted "
-            "as energy injection rates; rename the table to "
-            "[forcing.field_energy_injection_rates].",
-            FutureWarning,
-            stacklevel=3,
-        )
-        field_rates = legacy_rates
+    _validate_forcing_document(forcing)
+    config_values["forcing_type"] = forcing.get("type", "stochastic")
+    config_values["controlled_shell"] = deepcopy(forcing.get("controlled_shell"))
     if field_rates is not None:
         config_values["field_energy_injection_rates"].update(deepcopy(field_rates))
 
@@ -525,15 +523,15 @@ def _resolved_document(
             "N2": config_values["N2"],
         },
         "forcing": {
-            "use_forcing": config_values["use_forcing"],
-            "forcing_mode": config_values["forcing_mode"],
-            "n_min_force": config_values["n_min_force"],
-            "n_max_force": config_values["n_max_force"],
-            "alpha_force": config_values["alpha_force"],
-            "forcing_seed": config_values["forcing_seed"],
-            "epsilon_plus": config_values["epsilon_plus"],
-            "epsilon_minus": config_values["epsilon_minus"],
-            "field_energy_injection_rates": config_values["field_energy_injection_rates"],
+            "use_forcing": config.use_forcing, "type": config.forcing_type,
+            "forcing_seed": config.forcing_seed,
+            **({"controlled_shell": settings_document(config.controlled_shell)}
+               if config.forcing_type == "controlled_shell" else {
+                "forcing_mode": config.forcing_mode,
+                "n_min_force": config.n_min_force, "n_max_force": config.n_max_force,
+                "alpha_force": config.alpha_force, "epsilon_plus": config.epsilon_plus,
+                "epsilon_minus": config.epsilon_minus,
+                "field_energy_injection_rates": config.field_energy_injection_rates}),
         },
         "dissipation": {
             **config_values["auto_dissipation"],
