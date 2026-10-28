@@ -378,6 +378,24 @@ def alfvenic_energy(state: State, grid: Any, backend: Any, params: Any) -> float
     return total_energy(state, grid, backend, params)
 
 
+def total_energy_dissipation_modal_density(
+    state: State,
+    grid: Any,
+    backend: Any,
+    linear_ops: dict[str, Any],
+    params: Any,
+) -> Any:
+    """Return signed modal energy loss using the active damping operators."""
+
+    xp = backend.xp
+    phi_hat = derive_phi_hat(state["omega"], grid)
+    density_hat = (
+        -linear_ops["omega"] * grid.kperp2 * (xp.abs(phi_hat) ** 2)
+        - linear_ops["psi"] * grid.kperp2 * (xp.abs(state["psi"]) ** 2)
+    )
+    return density_hat
+
+
 def total_energy_dissipation_rhs(
     state: State,
     grid: Any,
@@ -387,12 +405,7 @@ def total_energy_dissipation_rhs(
 ) -> float:
     """Return the signed dissipative contribution to `d_t E`."""
 
-    xp = backend.xp
-    phi_hat = derive_phi_hat(state["omega"], grid)
-    density_hat = (
-        -linear_ops["omega"] * grid.kperp2 * (xp.abs(phi_hat) ** 2)
-        - linear_ops["psi"] * grid.kperp2 * (xp.abs(state["psi"]) ** 2)
-    )
+    density_hat = total_energy_dissipation_modal_density(state, grid, backend, linear_ops, params)
     return modal_average(density_hat, grid, backend)
 
 
@@ -451,9 +464,13 @@ def compute_equation_scalar_diagnostics(
         backend=backend,
         params=params,
         linear_ops=linear_ops,
-        extra_rhs_terms=extra_rhs_terms,
     )
     rhs_terms = budgets["total_energy"].setdefault("rhs_terms", {})
+    # Keep the instantaneous loss before replacing RHS terms by interval means.
+    if linear_ops is not None:
+        diagnostics["heating_total"] = -rhs_terms["dissipation"]
+    if extra_rhs_terms is not None:
+        rhs_terms.update({name: float(value) for name, value in extra_rhs_terms.get("total_energy", {}).items()})
     if budget_rhs_terms is not None and "total_energy" in budget_rhs_terms:
         rhs_terms.clear()
         rhs_terms.update({name: float(value) for name, value in budget_rhs_terms["total_energy"].items()})

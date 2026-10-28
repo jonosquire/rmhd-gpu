@@ -143,6 +143,43 @@ If auto dissipation is enabled, the scalar CSV also includes:
 - `auto_dissipation_ud`
 - `auto_dissipation_Ed`
 
+With spectra enabled (`[output] t_out_spec > 0`), `spectra.csv` also contains
+`heating_total`: the instantaneous loss of the equation-set total energy to
+dissipation, binned in perpendicular wavenumber. It uses the **active runtime
+damping operators**, including current automatic coefficients or unequal
+manual per-field coefficients and parallel damping. No extra input switch is
+needed. The existing energy spectra and output cadence are unchanged.
+
+For diagonal damping `d_t f_k = -D_f(k,t) f_k`, each field contributes
+`2 D_f(k,t) E_f(k,t)` before binning, with the same physical energy weights,
+one-sided rFFT accounting and volume normalization as the scalar budget.
+The values are **shell sums**, not densities per unit wavenumber:
+
+```text
+sum(spectral heating_total bins) = scalar heating_total
+```
+
+This equality applies at matching saved **time and step**. The new scalar
+`heating_total` uses the instantaneous state and operators. The existing
+`total_energy_rhs_dissipation` column remains the signed **preceding-interval
+mean** used for budget accounting (zero at the initial output), so its negative
+need not equal an instantaneous spectrum. Heating includes both perpendicular
+and parallel loss, not forcing or stratification work. The signed `a`-energy
+weight for `low_beta_stratified` with `N2 < 0` is preserved: in that case
+`heating_total` can be negative and is a signed quadratic-energy loss rather
+than positive thermodynamic heating.
+
+Plot the saved heating with:
+
+```bash
+python vis/plot_spectra.py outputs/spectra.csv --quantities heating_total
+```
+
+That plot has no inertial-range slope guide and uses a symmetric-log y-axis
+when values are negative. Existing spectra without heating remain readable.
+Exact heating generally cannot be reconstructed from old binned energy
+spectra alone: damping varies inside each bin and across its parallel modes.
+
 The full-field snapshots are self-contained. Each file stores:
 
 - `/metadata` with grid size, box size, backend, dtypes, and `x`, `y`, `z`

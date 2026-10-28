@@ -90,6 +90,29 @@ def test_plot_spectra_smoke(tmp_path) -> None:
     assert (output_dir / "b_perp.png").exists()
 
 
+@pytest.mark.parametrize("values", [(1., .5, .25), (1., -.5, 0.)])
+def test_heating_plot_keeps_sign_and_omits_energy_slope(tmp_path, monkeypatch, values):
+    from vis import plot_spectra
+
+    path = tmp_path / "spectra.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["time", "step", "quantity", "kperp", "value"])
+        for kperp, value in enumerate(values, 1):
+            writer.writerow([0., 0, "heating_total", kperp, value])
+
+    def inspect(fig, *, output_path, show, plt):
+        ax = fig.axes[0]
+        assert len(ax.lines) == 1  # no k^-5/3 energy guide
+        np.testing.assert_array_equal(ax.lines[0].get_ydata(), values)
+        assert ax.get_yscale() == ("symlog" if min(values) < 0 else "log")
+        assert "loss" in ax.get_ylabel()
+        plt.close(fig)
+
+    monkeypatch.setattr(plot_spectra, "finalize_figure", inspect)
+    plot_spectra.main([str(path), "--quantities", "heating_total"])
+
+
 def test_plot_fullfield_smoke(tmp_path) -> None:
     h5py = pytest.importorskip("h5py")
     snapshot_dir = tmp_path / "fullfields"

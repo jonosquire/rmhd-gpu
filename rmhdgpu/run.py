@@ -510,6 +510,7 @@ def run_simulation(settings: RunSettings, *, observer=None) -> dict[str, Any]:
                     backend,
                     equation_module=equation_module,
                     params=config,
+                    linear_ops=linear_ops,
                 )
                 spectra_writer.write_spectra(time=t, step=steps, spectra=spectra)
                 logger.event(

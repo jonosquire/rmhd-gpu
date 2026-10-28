@@ -26,6 +26,7 @@ GENERIC_FIELD_SCALAR_DIAGNOSTIC_INFO = {
 }
 
 STANDARD_ENERGY_SCALAR_DIAGNOSTIC_INFO = {
+    "heating_total": "Instantaneous loss of equation-module total energy to active damping; signed for indefinite energy. Matches the sum of heating_total spectral bins at the same time and step.",
     "total_energy": "Equation-module total energy used by budget plotting tools.",
     "total_energy_rhs_total": "Sum of saved signed RHS contributions to d_t total_energy.",
     "total_energy_rhs_dissipation": "Signed dissipative contribution to d_t total_energy; negative when damping removes energy.",
