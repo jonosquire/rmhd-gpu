@@ -8,6 +8,9 @@ should provide:
 - `ideal_rhs(state, ...)`: return the nondissipative right-hand side
 - `build_dissipation_operators(grid, params, ...)`: return diagonal damping data
 - `total_energy(state, ...)`: return the equation-set energy diagnostic
+- `total_energy_dissipation_modal_density(state, grid, backend, linear_ops, params)`:
+  return signed modal `d_t E` from the active damping operators, before rFFT
+  weights and volume normalization; shared by scalar loss and heating spectra
 - `compute_conserved_quantity_budgets(state, ...)`: optionally return
   conserved-quantity values plus named non-conservative RHS terms
 - Alfvénic equation sets should evolve `psi` plus either `phi` directly or

@@ -76,31 +76,49 @@ def perpendicular_energy_spectrum_from_state(
     bin_width: float | None = None,
     equation_module: Any | None = None,
     params: Any | None = None,
+    linear_ops: dict[str, Any] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Return perpendicular shell spectra for the selected equation set."""
+    """Return energy spectra, plus instantaneous heating if operators are supplied.
+
+    Use the actual runtime operators: rebuilding from params would silently use
+    stale manual coefficients during auto dissipation. Existing callers that
+    omit linear_ops still receive only energy spectra.
+    """
 
     backend_obj = state.backend if backend is None else backend
     if equation_module is not None and hasattr(equation_module, "perpendicular_energy_spectra"):
-        return equation_module.perpendicular_energy_spectra(
+        spectra = equation_module.perpendicular_energy_spectra(
             state,
             grid,
             backend_obj,
             bin_width=bin_width,
             params=params,
         )
+    else:
+        xp = backend_obj.xp
+        spectra: dict[str, np.ndarray] = {}
+        for index, field_name in enumerate(state.field_names):
+            kperp, spectrum = perpendicular_shell_spectrum(
+                0.5 * xp.abs(state[field_name]) ** 2,
+                grid,
+                backend_obj,
+                bin_width=bin_width,
+            )
+            if index == 0:
+                spectra["kperp"] = kperp
+            spectra[field_name] = spectrum
 
-    xp = backend_obj.xp
-    spectra: dict[str, np.ndarray] = {}
-    for index, field_name in enumerate(state.field_names):
-        kperp, spectrum = perpendicular_shell_spectrum(
-            0.5 * xp.abs(state[field_name]) ** 2,
-            grid,
-            backend_obj,
-            bin_width=bin_width,
+    if linear_ops is not None:
+        modal_loss = getattr(equation_module, "total_energy_dissipation_modal_density", None)
+        if modal_loss is None:
+            raise ValueError("Heating spectra require the equation's dissipation modal density.")
+        # This is minus the signed dE/dt density, with the same physical field
+        # weights as the scalar budget. Bin actual modal damping before summing
+        # over kz; a bin-center multiplier loses both within-bin and kz detail.
+        density_hat = -modal_loss(state, grid, backend_obj, linear_ops, params)
+        _, spectra["heating_total"] = perpendicular_shell_spectrum(
+            density_hat, grid, backend_obj, bin_width=bin_width,
         )
-        if index == 0:
-            spectra["kperp"] = kperp
-        spectra[field_name] = spectrum
     return spectra
 
 

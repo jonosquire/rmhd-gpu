@@ -109,17 +109,26 @@ def main(argv: list[str] | None = None) -> list[Path]:
 
     for quantity in quantities:
         fig, ax = plt.subplots(figsize=(6.5, 4.8), constrained_layout=True)
+        heating = quantity == "heating_total"
+        signed_heating = heating and any(
+            np.any(values < 0.) for _, values in spectra[quantity].values()
+        )
+        if signed_heating:
+            largest = max(float(np.max(np.abs(values))) for _, values in spectra[quantity].values())
+            ax.set(xscale="log", yscale="symlog")
+            ax.set_yscale("symlog", linthresh=max(largest*1e-6, np.finfo(float).tiny))
         ymax = 0.0
         latest_time = max(spectra[quantity])
         latest_curve = spectra[quantity][latest_time]
         for time_value in sorted(spectra[quantity]):
             kperp, values = spectra[quantity][time_value]
-            mask = (kperp > 0.0) & (values > 0.0)
+            mask = (kperp > 0.0) & (np.isfinite(values) if signed_heating else values > 0.0)
             if np.any(mask):
                 ymax = max(ymax, float(np.max(values[mask])))
-            ax.loglog(kperp[mask], values[mask], color=cmap(time_norm(time_value)), lw=2)
+            plot = ax.plot if signed_heating else ax.loglog
+            plot(kperp[mask], values[mask], color=cmap(time_norm(time_value)), lw=2)
 
-        guide_line = _guide_line(*latest_curve)
+        guide_line = None if heating else _guide_line(*latest_curve)
         if guide_line is not None:
             guide_k, guide_y = guide_line
             ax.loglog(guide_k, guide_y, color="0.55", ls=":", lw=1.6, label=r"$k^{-5/3}$ guide")
@@ -129,10 +138,10 @@ def main(argv: list[str] | None = None) -> list[Path]:
         colorbar.set_label("time")
 
         ax.set_xlabel(r"$k_\perp$")
-        ax.set_ylabel("value")
+        ax.set_ylabel("Signed energy loss per shell" if heating else "value")
         ax.set_title(quantity)
         ax.grid(True, alpha=0.25)
-        if args.y_span_decades > 0.0 and ymax > 0.0:
+        if not signed_heating and args.y_span_decades > 0.0 and ymax > 0.0:
             ax.set_ylim(ymax / (10.0 ** args.y_span_decades), ymax)
         if guide_line is not None:
             ax.legend(fontsize=8)
